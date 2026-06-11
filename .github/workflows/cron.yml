@@ -1,0 +1,63 @@
+name: Rakuten Kobo Hatena Blog Poster
+
+on:
+  schedule:
+    # 1時間に1回 (毎時0分) 実行
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  auto-post:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: true
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Install Japanese fonts
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq fonts-noto-cjk >/dev/null 2>&1
+
+    - name: Run Kobo Blogger
+      env:
+        RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
+        RAKUTEN_AFFILIATE_ID: ${{ secrets.RAKUTEN_AFFILIATE_ID }}
+        HATENA_ID: ${{ secrets.HATENA_ID }}
+        HATENA_BLOG_ID: ${{ secrets.HATENA_BLOG_ID }}
+        HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python kobo_blogger.py
+
+    - name: Commit and push posted cache
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        if [ -f posted_cache.txt ]; then
+          git add posted_cache.txt
+          if ! git diff --cached --exit-code; then
+            git commit -m "chore: update posted cache [skip ci]"
+            git push origin HEAD:${{ github.ref }}
+          else
+            echo "No changes in cache file."
+          fi
+        else
+          echo "Cache file not found."
+        fi
