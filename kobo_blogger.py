@@ -3,6 +3,7 @@ import sys
 import datetime
 import urllib.request
 import urllib.parse
+import urllib.error
 import json
 from hatena_api import HatenaAPI
 from article_generator import ArticleGenerator
@@ -56,6 +57,14 @@ def fetch_kobo_items(app_id: str, affiliate_id: str, genre_id: str, keyword: str
                         "releaseDate": item_data.get("releaseDate")
                     })
             return items
+    except urllib.error.HTTPError as e:
+        try:
+            error_body = e.read().decode("utf-8")
+            print(f"Failed to fetch from Rakuten Kobo API (HTTPError): {e}")
+            print(f"Error Response Body: {error_body}")
+        except Exception:
+            print(f"Failed to fetch from Rakuten Kobo API (HTTPError): {e}")
+        return []
     except Exception as e:
         print(f"Failed to fetch from Rakuten Kobo API: {e}")
         return []
