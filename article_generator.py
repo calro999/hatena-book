@@ -26,9 +26,9 @@ class ArticleGenerator:
 {item_caption}
 
 【紹介文執筆の厳格なルール】
-1. 与えられた「公式あらすじ」に記載されていない情報（結末、裏設定、あらすじにない登場人物、存在しない評判や感想など）は絶対に創作（ハルシネーション）しないでください。あらすじにある事実のみに基づき、魅力的にリライト・紹介してください。
+1. 与えられた「公式あらすじ」に記載されていない情報（結末、裏設定、あらすじにない登場人物、存在しない評判や感想など）は絶対に創作（ハルシネーション）しないこと。あらすじにある事実のみに基づき、魅力的に紹介してください。
 2. 以下の構成ルールに厳格に従い、Markdown形式で出力してください。
-3. 挨拶文（「承知しました」「以下が紹介文です」など）や、解説、余計な前置き・後書きは【絶対に1文字も】出力しないでください。
+3. 挨拶文や解説、余計な前置き・後書きは【絶対に1文字も】出力しないでください。
 
 【構成ルール】
 ### 注目ポイント
@@ -43,7 +43,6 @@ class ArticleGenerator:
         # Trial order of Free LLM APIs (Same as hatena-mono)
         generators = [
             ("Gemini API (Free Tier)", self._generate_with_gemini),
-            ("DuckDuckGo Chat API (Free, No Key Required)", self._generate_with_ddg),
             ("GitHub Models API (Free for Actions/PAT)", self._generate_with_github_models),
             ("OpenRouter Free API", self._generate_with_openrouter),
             ("Hugging Face API (Free Tier)", self._generate_with_huggingface),
@@ -76,7 +75,7 @@ class ArticleGenerator:
 - 読者の興味を惹きつける見どころの凝縮
 
 ### こんな人におすすめ
-新刊情報をいち早くチェックしたい方や、あらすじから新しい読書体験を探しているすべての方におすすめの一冊です。"""
+新刊情報をいち早くチェックしたい方や, あらすじから新しい読書体験を探しているすべての方におすすめの一冊です。"""
 
         # Post-Processing to clean up LLM meta-explanations
         raw_article = re.sub(r"^(はい、|承知いたしました。|以下が紹介文です。|以下に記事を出力します。|以下が執筆した記事です。)\s*", "", raw_article)
@@ -86,24 +85,16 @@ class ArticleGenerator:
         html_output = markdown.markdown(raw_article, extensions=['nl2br'])
         return html_output
 
-    def _generate_with_ddg(self, prompt: str) -> Optional[str]:
-        try:
-            from duckduckgo_search import DDGS
-            with DDGS() as ddgs:
-                # Use gpt-4o-mini via DuckDuckGo Chat
-                resp = ddgs.chat(prompt, model="gpt-4o-mini")
-                if resp:
-                    return resp
-        except Exception as e:
-            print(f"DuckDuckGo Chat API failed: {e}")
-        return None
-
     def _generate_with_gemini(self, prompt: str) -> Optional[str]:
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
+            print("Debug: GEMINI_API_KEY is not set or empty in environment variables.")
             return None
         
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        print(f"Debug: GEMINI_API_KEY is set. Length: {len(api_key)}")
+        
+        # Use stable gemini-1.5-flash model
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
         payload = {
             "contents": [{
