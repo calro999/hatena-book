@@ -75,7 +75,7 @@ class ArticleGenerator:
 - 読者の興味を惹きつける見どころの凝縮
 
 ### こんな人におすすめ
-新刊情報をいち早くチェックしたい方や, あらすじから新しい読書体験を探しているすべての方におすすめの一冊です。"""
+新刊情報をいち早くチェックしたい方や、あらすじから新しい読書体験を探しているすべての方におすすめの一冊です。"""
 
         # Post-Processing to clean up LLM meta-explanations
         raw_article = re.sub(r"^(はい、|承知いたしました。|以下が紹介文です。|以下に記事を出力します。|以下が執筆した記事です。)\s*", "", raw_article)
@@ -93,8 +93,8 @@ class ArticleGenerator:
         
         print(f"Debug: GEMINI_API_KEY is set. Length: {len(api_key)}")
         
-        # Use stable gemini-1.5-flash model
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        # Use stable API version 'v1' for gemini-1.5-flash
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
         payload = {
             "contents": [{
