@@ -33,7 +33,7 @@ GitHubリポジトリの `Settings` > `Secrets and variables` > `Actions` に以
 | `RAKUTEN_APP_ID` | 楽天ウェブサービス アプリID |
 | `RAKUTEN_AFFILIATE_ID` | 楽天アソシエイトID (アフィリエイトID) |
 | `HATENA_ID` | はてなID (はてなブログのアカウント名) |
-| `HATENA_BLOG_ID` | はてなブログのドメイン（例: `your-blog.hatenablog.com`） |
+| `HATENA_BLOG_ID` | はてなブログのドメイン（例: `book-muryo.hateblo.jp`） |
 | `HATENA_API_KEY` | はてなブログ管理画面「詳細設定」から取得できるAPIキー |
 | `GEMINI_API_KEY` | Gemini APIキー (任意: LLM生成のファーストチョイスとして使用) |
 

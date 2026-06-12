@@ -107,7 +107,7 @@ def main():
     rakuten_affiliate_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "DUMMY_AFFILIATE_ID")
     
     hatena_id = os.environ.get("HATENA_ID", "DUMMY_HATENA_ID")
-    blog_id = os.environ.get("HATENA_BLOG_ID", "DUMMY_BLOG_ID")
+    blog_id = os.environ.get("HATENA_BLOG_ID", "book-muryo.hateblo.jp")
     hatena_api_key = os.environ.get("HATENA_API_KEY", "")
 
     dry_run = not hatena_api_key or hatena_api_key.startswith("DUMMY")
