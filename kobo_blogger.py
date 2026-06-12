@@ -27,6 +27,8 @@ def fetch_kobo_items(app_id: str, affiliate_id: str, genre_id: str, keyword: str
         print("Rakuten App ID not set. Using mock data for local dry-run.")
         return get_mock_items(genre_id)
 
+    print(f"Debug: RAKUTEN_APP_ID length is {len(app_id)}")
+
     base_url = "https://app.rakuten.co.jp/services/api/Kobo/EbookSearch/20170426"
     params = {
         "applicationId": app_id,
