@@ -93,8 +93,8 @@ class ArticleGenerator:
         
         print(f"Debug: GEMINI_API_KEY is set. Length: {len(api_key)}")
         
-        # Use v1beta endpoint and gemini-1.5-flash-latest model
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
+        # Use v1beta endpoint with gemini-1.5-flash model
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
         payload = {
             "contents": [{
