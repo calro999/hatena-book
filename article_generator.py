@@ -43,6 +43,7 @@ class ArticleGenerator:
         # Trial order of Free LLM APIs (Same as hatena-mono)
         generators = [
             ("Gemini API (Free Tier)", self._generate_with_gemini),
+            ("DuckDuckGo Chat API (Free, No Key Required)", self._generate_with_ddg),
             ("GitHub Models API (Free for Actions/PAT)", self._generate_with_github_models),
             ("OpenRouter Free API", self._generate_with_openrouter),
             ("Hugging Face API (Free Tier)", self._generate_with_huggingface),
@@ -84,6 +85,18 @@ class ArticleGenerator:
         import markdown
         html_output = markdown.markdown(raw_article, extensions=['nl2br'])
         return html_output
+
+    def _generate_with_ddg(self, prompt: str) -> Optional[str]:
+        try:
+            from duckduckgo_search import DDGS
+            with DDGS() as ddgs:
+                # Use gpt-4o-mini via DuckDuckGo Chat
+                resp = ddgs.chat(prompt, model="gpt-4o-mini")
+                if resp:
+                    return resp
+        except Exception as e:
+            print(f"DuckDuckGo Chat API failed: {e}")
+        return None
 
     def _generate_with_gemini(self, prompt: str) -> Optional[str]:
         api_key = os.environ.get("GEMINI_API_KEY")
