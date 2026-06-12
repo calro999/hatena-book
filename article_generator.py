@@ -93,8 +93,8 @@ class ArticleGenerator:
         
         print(f"Debug: GEMINI_API_KEY is set. Length: {len(api_key)}")
         
-        # Use v1beta endpoint with gemini-1.5-flash model
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        # EXACT SAME endpoint and model as hatena-mono
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
         payload = {
             "contents": [{
@@ -162,7 +162,7 @@ class ArticleGenerator:
                 {"role": "system", "content": "あなたはプロの書評ブロガーです。与えられたあらすじ以外の情報を勝手に創作（ハルシネーション）しないことが最も重要です。指示された厳格なルールを守り、余計な解説を一切含まない日本語ブログ本文のみを出力します。"},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.2
+            "temperature": 0.7
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=30)
         if resp.status_code == 200:
