@@ -29,7 +29,6 @@ def fetch_kobo_items(app_id: str, access_key: str, affiliate_id: str, genre_id: 
 
     print(f"Debug: RAKUTEN_APP_ID length is {len(app_id)}")
 
-    # Use the latest openapi endpoint
     base_url = "https://openapi.rakuten.co.jp/services/api/Kobo/EbookSearch/20170426"
     params = {
         "applicationId": app_id,
@@ -40,7 +39,6 @@ def fetch_kobo_items(app_id: str, access_key: str, affiliate_id: str, genre_id: 
         "format": "json"
     }
     
-    # If accessKey is provided, append it to the request parameters
     if access_key:
         print(f"Debug: RAKUTEN_ACCESS_KEY is set. Length: {len(access_key)}")
         params["accessKey"] = access_key
@@ -122,7 +120,6 @@ def main():
     current_hour = now_jst.hour
     print(f"Current Time (JST): {now_jst.strftime('%Y-%m-%d %H:%M:%S')} (Hour: {current_hour})")
 
-    # Odd hour -> Comic. Even hour -> Light Novel.
     if current_hour % 2 != 0:
         genre_id = "101"
         keyword = ""
@@ -170,11 +167,31 @@ def main():
         category="novel" if genre_name == "ラノベ・小説" else "manga"
     )
 
-    # 7. Generate Article Content
+    # 7. Generate Article Content (Mapping to hatena-mono interface)
     print("Generating Article Content using LLM...")
     article_gen = ArticleGenerator()
     article_gen.load_model()
-    llm_section = article_gen.generate_review_article(target_item)
+    
+    title_raw = target_item["title"]
+    import re
+    clean_title = re.sub(r'【[^】]+】|\[[^\]]+\]', '', title_raw).strip()
+
+    # Construct the features list from itemCaption for article_generator.py to parse
+    excerpt = target_item['itemCaption'][:150] + "..." if len(target_item['itemCaption']) > 150 else target_item['itemCaption']
+    mapped_features = [
+        f"最新刊・注目作品『{clean_title}』の配信スタート",
+        f"あらすじ・見どころ: {excerpt}"
+    ]
+    
+    generator_input_item = {
+        "title": target_item["title"],
+        "clean_title": clean_title,
+        "features": mapped_features,
+        "price": "電子書籍版",
+        "url": target_item["affiliateUrl"]
+    }
+    
+    llm_section = article_gen.generate_review_article(generator_input_item)
 
     # 8. Setup Hatena Client and Upload Eyecatch
     hatena_client = HatenaAPI(
@@ -209,11 +226,19 @@ def main():
 </div>
 """
 
-    article_content = f"{img_html}\n{llm_section}\n{synopsis_html}\n{cta_html}"
+    # Google Analytics Tag (Required)
+    ga_html = """<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NFPP76LS9J"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-NFPP76LS9J');
+</script>
+"""
 
-    title_raw = target_item["title"]
-    import re
-    clean_title = re.sub(r'【[^】]+】|\[[^\]]+\]', '', title_raw).strip()
+    # Combine all parts with GA tag at the very top of HTML
+    article_content = f"{ga_html}\n{img_html}\n{llm_section}\n{synopsis_html}\n{cta_html}"
 
     if genre_name == "漫画":
         blog_title = f"【新刊情報】『{clean_title}』が発売開始！最新巻のあらすじ・見どころまとめ"

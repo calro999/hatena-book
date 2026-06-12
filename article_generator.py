@@ -3,6 +3,7 @@ import re
 import requests
 import json
 import time
+import urllib.parse
 from typing import Dict, Any, Optional, List
 
 class ArticleGenerator:
@@ -10,37 +11,40 @@ class ArticleGenerator:
         pass
 
     def load_model(self):
-        print("ArticleGenerator: Initialized using online free API router.")
+        print("ArticleGenerator: Initialized using online free API router (No local models loaded).")
         pass
 
     def generate_review_article(self, item: Dict[str, Any]) -> str:
         title = item.get("title", "")
-        item_caption = item.get("itemCaption", "").strip()
-        if not item_caption:
-            item_caption = "（公式のあらすじが登録されていません。新刊情報から詳細をご確認ください。）"
+        clean_title = item.get("clean_title", title)
+        features = "\n".join([f"- {f}" for f in item.get("features", [])])
+        price = item.get("price", "")
+        url = item.get("url", "")
 
-        prompt = f"""以下の電子書籍の公式あらすじ（itemCaption）を元に、紹介セクションを作成してください。
+        prompt = f"""以下のAmazonの商品情報を元に、はてなブログの「編集部おすすめ」に選出されるレベルの、熱量が高く独自の視点に満ちた個人ブログのレビュー記事を執筆してください。
+単なる仕様説明や一般的な評価の羅列（テンプレ記事）を徹底的に排除し、あなたの「偏愛」や「ストーリー」を感じさせる、唯一無二の記事に仕上げてください。
 
-【書名】: {title}
-【公式あらすじ】:
-{item_caption}
+【商品名】: {title}
+【価格】: {price}
+【主な特徴】:
+{features}
+【商品検索URL】: {url}
 
-【紹介文執筆の厳格なルール】
-1. 与えられた「公式あらすじ」に記載されていない情報（結末、裏設定、あらすじにない登場人物、存在しない評判や感想など）は絶対に創作（ハルシネーション）しないこと。あらすじにある事実のみに基づき、魅力的に紹介してください。
-2. 以下の構成ルールに厳格に従い、Markdown形式で出力してください。
-3. 挨拶文や解説、余計な前置き・後書きは【絶対に1文字も】出力しないでください。
+【執筆の構成ルール（見出しの自律設計）】:
+- 固定された章構成（「はじめに」「デザイン」など）は使用しないでください。商品の特性やあなたが最も伝えたい魅力に合わせ、読者を惹きつけるキャッチーな見出し（3〜5個程度）を自律的に考案してください（例: 「## ◯◯という沼にハマる」「## 1ヶ月使い倒して気づいた、意外な盲点」など）。
+- 記事の導入は、製品の無味乾燥な紹介ではなく、あなたの日常の課題や、その製品を導入せざるを得なかった背景などの「ストーリー（エッセイ風の書き出し）」から始めてください。
+- 「独自のこだわり評価軸」を必ず1つ設定して語ってください（例: 「ノイキャン性能がもたらす『カフェでの究極の没入感』」「カバンの中の極小スペースにいかに美しく収まるか」など）。
+- デメリットや「ここは惜しい！」というポイントを、スペック批判ではなく、実体験に基づくリアルな本音として包み隠さず書いてください。
 
-【構成ルール】
-### 注目ポイント
-- [注目ポイント1をあらすじから魅力的にリライト]
-- [注目ポイント2をあらすじから魅力的にリライト]
-- [注目ポイント3をあらすじから魅力的にリライト]
-
-### こんな人におすすめ
-[あらすじに基づき、どんな人にこの本がおすすめかを2行程度でポジティブに紹介]
+【執筆の厳格なルール（最優先）】:
+1. ブログ記事の**本文のみ**を出力してください。挨拶文（「承知しました」「以下が記事です」など）や、記事の解説、まとめのアドバイス（「以上のように、自然な言葉遣い〜」「購入につなげることができます」など）は**絶対に1文字も出力しないでください**。記事の最後は「ぜひチェックしてみてください！」などの読者へのメッセージで終了させてください。
+2. 「アフィリエイト」「アフィリンク」「誘導」「広告」といった、読者に商業的な意図を直接感じさせる言葉は**見出し・本文含め、絶対に記事内に出力しないでください**。
+3. 記事はMarkdown（マークダウン）形式で執筆してください。見出しは「## 」「### 」を使用し、箇条書きは「- 」を使用してください。
+4. 商品リンクは, 文末付近に自然な形で `[Amazonで「{clean_title}」の価格やクチコミをチェックする]({url})` のようにMarkdownのリンク記法で埋め込んでください。
+5. AI特有の「〜はいかがでしょうか」「〜をご紹介します」「〜と言えるでしょう」「〜の特徴を持っています」といった説明調のテンプレフレーズを多用せず、人間が強いこだわりを持って書いたレビューのリアリティと熱量のある文体で書いてください。
 """
 
-        # Trial order of Free LLM APIs (Same as hatena-mono)
+        # Trial order of Free LLM APIs
         generators = [
             ("Gemini API (Free Tier)", self._generate_with_gemini),
             ("GitHub Models API (Free for Actions/PAT)", self._generate_with_github_models),
@@ -54,7 +58,7 @@ class ArticleGenerator:
             try:
                 print(f"Attempting article generation with {name}...")
                 res = gen_fn(prompt)
-                if res and len(res.strip()) > 100:
+                if res and len(res.strip()) > 300:
                     raw_article = res.strip()
                     print(f"Successfully generated article using {name}!")
                     break
@@ -68,43 +72,64 @@ class ArticleGenerator:
             if os.environ.get("GITHUB_ACTIONS") == "true":
                 raise RuntimeError("All free LLM APIs failed to generate a valid review article in GitHub Actions. Cannot proceed to prevent posting spam templates.")
             else:
-                print("WARNING: All free LLM APIs failed or are rate-limited. Since this is a local dry-run, generating dummy review text.")
-                raw_article = f"""### 注目ポイント
-- 本書公式のあらすじに基づく、独自のストーリー展開と魅力的なキャラクター設定
-- 本日発売されたばかりの注目作品の最新刊
-- 読者の興味を惹きつける見どころの凝縮
+                print("WARNING: All free LLM APIs failed or are rate-limited. Since this is a local dry-run, generating dummy review text to verify downstream components.")
+                raw_article = f"""## ◯◯という沼にハマる
+これはローカル開発環境でのドライラン検証用のテスト記事です。現在、すべてのオンライン無料LLM APIがレート制限またはキー未設定のため利用できませんでした。
 
-### こんな人におすすめ
-新刊情報をいち早くチェックしたい方や、あらすじから新しい読書体験を探しているすべての方におすすめの一冊です。"""
+## 1ヶ月使い倒して気づいた、意外な盲点
+この製品は優れたデザインとコンパクトさを兼ね備えています。
+
+## 実用性を超えたマニアックな視点での評価
+テスト特徴1、特徴2、特徴3により、非常に高いレベルの実用性を誇ります。
+
+[Amazonで「{clean_title}」の価格やクチコミをチェックする]({url})
+ぜひチェックしてみてください！"""
 
         # Post-Processing to clean up LLM meta-explanations
-        raw_article = re.sub(r"^(はい、|承知いたしました。|以下が紹介文です。|以下に記事を出力します。|以下が執筆した記事です。)\s*", "", raw_article)
+        raw_article = re.sub(r"^(はい、|承知いたしました。|以下が商品紹介記事です。|以下に記事を出力します。|以下が執筆した記事です。)\s*", "", raw_article)
+        meta_markers = [
+            "以上のように",
+            "このように、",
+            "自然な言葉遣いと",
+            "アフィリエイトリンクへの",
+            "読者は商品の魅力を理解し",
+            "購入につなげることができます"
+        ]
+        for marker in meta_markers:
+            if marker in raw_article:
+                print(f"Truncating AI meta-explanation found at marker: '{marker}'")
+                raw_article = raw_article.split(marker)[0].rstrip()
 
         # Convert Markdown to HTML for Hatena Blog compatibility
         import markdown
         html_output = markdown.markdown(raw_article, extensions=['nl2br'])
+        
+        # Force all <a> tags to open in a new tab (target="_blank" rel="noopener noreferrer")
+        def add_target_blank(match):
+            tag = match.group(0)
+            if 'target=' not in tag:
+                tag = tag.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ')
+            return tag
+            
+        html_output = re.sub(r'<a\s+[^>]*>', add_target_blank, html_output)
         return html_output
 
     def _generate_with_gemini(self, prompt: str) -> Optional[str]:
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
-            print("Debug: GEMINI_API_KEY is not set or empty in environment variables.")
             return None
         
-        print(f"Debug: GEMINI_API_KEY is set. Length: {len(api_key)}")
-        
-        # EXACT SAME endpoint and model as hatena-mono
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
         payload = {
             "contents": [{
                 "parts": [{
-                    "text": "あなたはプロの書評ブロガーです。与えられたあらすじ以外の情報を勝手に創作（ハルシネーション）しないことが最も重要です。指示されたルールと章構成を完全に守り、余計な挨拶や解説を一切含まないブログ本文のみを出力します。\n\n" + prompt
+                    "text": "あなたはモノに並々ならぬこだわりを持つ個人ブロガーです。商品のスペック説明は最小限にし、この商品を導入したことで日常がどう劇的に変わったかというライフスタイルへの変化（ベネフィット）を、熱量と独自の視点で語ってください。他人事の解説調ではなく、書き手の顔が見える一人称の熱い語り口で執筆してください。指示された厳格なルールと章構成を完全に守り、余計な挨拶や解説を一切含まないブログ本文のみを出力します。\n\n" + prompt
                 }]
             }],
             "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 1000
+                "temperature": 0.7,
+                "maxOutputTokens": 2000
             }
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=30)
@@ -131,10 +156,10 @@ class ArticleGenerator:
         payload = {
             "model": "gpt-4o-mini",
             "messages": [
-                {"role": "system", "content": "あなたはプロの書評ブロガーです。与えられたあらすじ以外の情報を勝手に創作（ハルシネーション）しないことが最も重要です。指示されたルールを守り、日本語で前置き・後書きなしでブログ本文のみを出力してください。"},
+                {"role": "system", "content": "あなたはモノに並々ならぬこだわりを持つ個人ブロガーです。商品のスペック説明は最小限にし、この商品を導入したことで日常がどう劇的に変わったかというライフスタイルへの変化（ベネフィット）を、熱量と独自の視点で語ってください。他人事の解説調ではなく、書き手の顔が見える一人称の熱い語り口で執筆してください。指示されたルールを厳格に守り、日本語で前置き・後書きなしでブログ本文のみを出力してください。"},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.2
+            "temperature": 0.7
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=30)
         if resp.status_code == 200:
@@ -159,7 +184,7 @@ class ArticleGenerator:
         payload = {
             "model": "google/gemma-2-9b-it:free",
             "messages": [
-                {"role": "system", "content": "あなたはプロの書評ブロガーです。与えられたあらすじ以外の情報を勝手に創作（ハルシネーション）しないことが最も重要です。指示された厳格なルールを守り、余計な解説を一切含まない日本語ブログ本文のみを出力します。"},
+                {"role": "system", "content": "あなたはモノに並々ならぬこだわりを持つ個人ブロガーです。商品のスペック説明は最小限にし、この商品を導入したことで日常がどう劇的に変わったかというライフスタイルへの変化（ベネフィット）を、熱量と独自の視点で語ってください。他人事の解説調ではなく、書き手の顔が見える一人称の熱い語り口で執筆してください。指示された厳格なルールを守り、余計な解説を一切含まない日本語ブログ本文のみを出力します。"},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.7
@@ -187,10 +212,10 @@ class ArticleGenerator:
             "Content-Type": "application/json"
         }
         payload = {
-            "inputs": f"<|im_start|>system\nあなたはプロの書評ブロガーです。与えられたあらすじ以外の情報を勝手に創作（ハルシネーション）しないことが最も重要です。日本語で余計な前置きや後書きなしに、本文のみを出力します。<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
+            "inputs": f"<|im_start|>system\nあなたはモノに並々ならぬこだわりを持つ個人ブロガーです。商品のスペック説明は最小限にし、この商品を導入したことで日常がどう劇的に変わったかというライフスタイルへの変化（ベネフィット）を、熱量と独自の視点で語ってください。他人事の解説調ではなく、書き手の顔が見える一人称の熱い語り口で執筆してください。日本語で余計な前置きや後書きなしに、本文のみを出力します。<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n",
             "parameters": {
-                "max_new_tokens": 800,
-                "temperature": 0.2
+                "max_new_tokens": 1500,
+                "temperature": 0.7
             }
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=45)
@@ -208,13 +233,16 @@ class ArticleGenerator:
         return None
 
     def _generate_with_pollinations(self, prompt: str) -> Optional[str]:
+        """Pollinations AIのテキスト生成。異なるモデルでPOSTリトライして429を回避します。"""
         url = "https://text.pollinations.ai/"
+        
+        # Try different free models on Pollinations to spread load and avoid 429
         models = ["openai", "qwen", "mistral"]
         
         for attempt, model in enumerate(models):
             payload = {
                 "messages": [
-                    {"role": "system", "content": "あなたはプロの書評ブロガーです。与えられたあらすじ以外の情報を勝手に創作（ハルシネーション）しないことが最も重要です。指示されたルールを厳格に守り、日本語で前置き・後書きなしでブログ本文のみを出力してください。"},
+                    {"role": "system", "content": "あなたはモノに並々ならぬこだわりを持つ個人ブロガーです。商品のスペック説明は最小限にし、この商品を導入したことで日常がどう劇的に変わったかというライフスタイルへの変化（ベネフィット）を、熱量と独自の視点で語ってください。他人事の解説調ではなく、書き手の顔が見える一人称の熱い語り口で執筆してください。指示されたルールを厳格に守り、日本語で前置き・後書きなしでブログ本文のみを出力してください。"},
                     {"role": "user", "content": prompt}
                 ],
                 "model": model
@@ -222,10 +250,10 @@ class ArticleGenerator:
             try:
                 print(f"Trying Pollinations AI POST (model: {model}, attempt: {attempt+1})...")
                 resp = requests.post(url, json=payload, timeout=25)
-                if resp.status_code == 200 and len(resp.text.strip()) > 100:
+                if resp.status_code == 200 and len(resp.text.strip()) > 300:
                     return resp.text
                 elif resp.status_code == 429:
-                    print(f"Pollinations AI {model} returned 429. Waiting {attempt+2}s...")
+                    print(f"Pollinations AI {model} returned 429. Waiting {attempt+2}s before trying next model...")
                     time.sleep(attempt+2)
                 else:
                     print(f"Pollinations AI {model} returned status {resp.status_code}")
