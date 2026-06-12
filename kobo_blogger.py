@@ -21,15 +21,16 @@ def save_cache(item_number: str):
     with open(CACHE_FILE, "a", encoding="utf-8") as f:
         f.write(f"{item_number}\n")
 
-def fetch_kobo_items(app_id: str, affiliate_id: str, genre_id: str, keyword: str) -> list:
-    """Fetches items from Rakuten Kobo Ebook Search API."""
+def fetch_kobo_items(app_id: str, access_key: str, affiliate_id: str, genre_id: str, keyword: str) -> list:
+    """Fetches items from the latest Rakuten Kobo Ebook Search API."""
     if not app_id or app_id.startswith("DUMMY"):
         print("Rakuten App ID not set. Using mock data for local dry-run.")
         return get_mock_items(genre_id)
 
     print(f"Debug: RAKUTEN_APP_ID length is {len(app_id)}")
 
-    base_url = "https://app.rakuten.co.jp/services/api/Kobo/EbookSearch/20170426"
+    # Use the latest openapi endpoint
+    base_url = "https://openapi.rakuten.co.jp/services/api/Kobo/EbookSearch/20170426"
     params = {
         "applicationId": app_id,
         "affiliateId": affiliate_id,
@@ -38,6 +39,11 @@ def fetch_kobo_items(app_id: str, affiliate_id: str, genre_id: str, keyword: str
         "koboGenreId": genre_id,
         "format": "json"
     }
+    
+    # If accessKey is provided, append it to the request parameters
+    if access_key:
+        print(f"Debug: RAKUTEN_ACCESS_KEY is set. Length: {len(access_key)}")
+        params["accessKey"] = access_key
     if keyword:
         params["keyword"] = keyword
 
@@ -99,6 +105,7 @@ def main():
     
     # 1. Configurations
     rakuten_app_id = os.environ.get("RAKUTEN_APP_ID", "DUMMY_APP_ID")
+    rakuten_access_key = os.environ.get("RAKUTEN_ACCESS_KEY", "")
     rakuten_affiliate_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "DUMMY_AFFILIATE_ID")
     
     hatena_id = os.environ.get("HATENA_ID", "DUMMY_HATENA_ID")
@@ -110,7 +117,6 @@ def main():
         print("Warning: HATENA_API_KEY is not set. Running in DRY-RUN/DEMO mode.")
 
     # 2. Determine Genre by Current JST Hour
-    # Get current time in JST (UTC+9)
     timezone_jst = datetime.timezone(datetime.timedelta(hours=9))
     now_jst = datetime.datetime.now(timezone_jst)
     current_hour = now_jst.hour
@@ -133,15 +139,14 @@ def main():
     print(f"Loaded {len(posted_cache)} posted items from cache.")
 
     # 4. Fetch Items
-    items = fetch_kobo_items(rakuten_app_id, rakuten_affiliate_id, genre_id, keyword)
+    items = fetch_kobo_items(rakuten_app_id, rakuten_access_key, rakuten_affiliate_id, genre_id, keyword)
     if not items:
         print("Error: No items fetched from Rakuten Kobo API.")
         sys.exit(1)
 
     print(f"Fetched {len(items)} items. Checking for new items...")
 
-    # 5. Filter Unposted Items (Find the newest unposted item)
-    # The API returns items sorted by -releaseDate, so the first unposted item in the list is the newest.
+    # 5. Filter Unposted Items
     target_item = None
     for item in items:
         item_num = item.get("itemNumber")
@@ -181,7 +186,6 @@ def main():
     uploaded_image_url = hatena_client.upload_image_to_fotolife(eyecatch_path)
     if not uploaded_image_url:
         print("Fotolife upload failed or skipped. Using Unsplash fallback in HTML.")
-        # Fallback to an Unsplash image URL
         uploaded_image_url = img_gen._select_unsplash_image_url(
             target_item["title"], 
             category="novel" if genre_name == "ラノベ・小説" else "manga"
@@ -205,10 +209,8 @@ def main():
 </div>
 """
 
-    # Complete Article Body
     article_content = f"{img_html}\n{llm_section}\n{synopsis_html}\n{cta_html}"
 
-    # Determine Title based on genre
     title_raw = target_item["title"]
     import re
     clean_title = re.sub(r'【[^】]+】|\[[^\]]+\]', '', title_raw).strip()
