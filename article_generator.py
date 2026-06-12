@@ -14,6 +14,53 @@ class ArticleGenerator:
         print("ArticleGenerator: Initialized using online free API router (No local models loaded).")
         pass
 
+    def translate_synopsis(self, text: str) -> str:
+        """Translates the given synopsis to natural Japanese if it is in English or needs formatting."""
+        if not text:
+            return ""
+            
+        # Check if the text contains mostly English/non-Japanese characters
+        # If it's already in Japanese, we might still want to clean/format it, but we definitely want to translate if it is English.
+        prompt = f"""以下の文章（書籍のあらすじ・紹介文）を、魅力的で自然な日本語に翻訳および整形してください。
+もし元の文章が英語の場合は、日本語の丁寧な文章に翻訳してください。
+既に日本語の場合は、より読みやすく魅力的なあらすじに整えてください。
+
+【元の文章】:
+{text}
+
+【出力ルール（厳格）】:
+- 翻訳・整形後の日本語のあらすじ本文のみを出力してください。
+- 挨拶や余計な解説（「以下が翻訳です」など）は絶対に含めないでください。
+"""
+
+        generators = [
+            ("Gemini API (Free Tier)", self._generate_with_gemini),
+            ("GitHub Models API (Free for Actions/PAT)", self._generate_with_github_models),
+            ("OpenRouter Free API", self._generate_with_openrouter),
+            ("Hugging Face API (Free Tier)", self._generate_with_huggingface),
+            ("Pollinations AI Free (No Key Required)", self._generate_with_pollinations),
+        ]
+
+        translated_text = None
+        for name, gen_fn in generators:
+            try:
+                print(f"Attempting synopsis translation with {name}...")
+                res = gen_fn(prompt)
+                if res and len(res.strip()) > 10:
+                    translated_text = res.strip()
+                    print(f"Successfully translated synopsis using {name}!")
+                    break
+            except Exception as e:
+                print(f"Error calling {name} for translation: {e}. Trying next fallback...")
+
+        if not translated_text:
+            print("WARNING: All translation APIs failed. Using original text.")
+            return text
+
+        # Clean up any potential markdown formatting or prefix/suffix that LLMs sometimes generate
+        translated_text = re.sub(r"^(はい、|承知いたしました。|以下が翻訳です。|以下に日本語訳を出力します。|翻訳結果：|翻訳：)\s*", "", translated_text)
+        return translated_text
+
     def generate_review_article(self, item: Dict[str, Any]) -> str:
         title = item.get("title", "")
         clean_title = item.get("clean_title", title)

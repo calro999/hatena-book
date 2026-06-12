@@ -208,14 +208,18 @@ def main():
             category="novel" if genre_name == "ラノベ・小説" else "manga"
         )
 
+    # Translate synopsis to Japanese and wrap in a styled div (avoiding blockquote overlap)
+    print("Translating/formatting synopsis...")
+    translated_synopsis = article_gen.translate_synopsis(target_item['itemCaption'])
+
     # Construct HTML article
     img_html = f'<div style="text-align: center; margin: 20px 0;"><img src="{uploaded_image_url}" alt="{target_item["title"]}" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.08);"></div>'
     
     synopsis_html = f"""
 <h3>公式あらすじ</h3>
-<blockquote style="background: #f9f9f9; padding: 15px; border-left: 4px solid #0099FF; margin: 20px 0; font-style: italic;">
-    {target_item['itemCaption']}
-</blockquote>
+<div style="background: #f9f9f9; padding: 18px 20px; border-left: 5px solid #0099FF; margin: 20px 0; line-height: 1.6; color: #444; border-radius: 0 8px 8px 0; font-size: 15px;">
+    {translated_synopsis}
+</div>
 """
 
     cta_html = f"""
