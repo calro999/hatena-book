@@ -312,7 +312,7 @@ def main():
     # 9. Post to Hatena Blog
     success = hatena_client.post_entry(
         title=blog_title,
-        html_content=article_content,
+        content=article_content,
         is_draft=False
     )
 

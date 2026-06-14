@@ -146,19 +146,8 @@ class ArticleGenerator:
                 print(f"Truncating AI meta-explanation found at marker: '{marker}'")
                 raw_article = raw_article.split(marker)[0].rstrip()
 
-        # Convert Markdown to HTML for Hatena Blog compatibility
-        import markdown
-        html_output = markdown.markdown(raw_article, extensions=['nl2br'])
-        
-        # Force all <a> tags to open in a new tab (target="_blank" rel="noopener noreferrer")
-        def add_target_blank(match):
-            tag = match.group(0)
-            if 'target=' not in tag:
-                tag = tag.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ')
-            return tag
-            
-        html_output = re.sub(r'<a\s+[^>]*>', add_target_blank, html_output)
-        return html_output
+        # Return the raw Markdown content directly for Hatena Blog to render as Markdown
+        return raw_article
 
     def _generate_with_gemini(self, prompt: str) -> Optional[str]:
         api_key = os.environ.get("GEMINI_API_KEY")

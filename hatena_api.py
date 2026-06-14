@@ -103,14 +103,14 @@ class HatenaAPI:
             print(f"Failed to upload image to Hatena Fotolife: {e}")
             return None
 
-    def post_entry(self, title: str, html_content: str, is_draft: bool = False) -> bool:
+    def post_entry(self, title: str, content: str, is_draft: bool = False) -> bool:
         """Posts an entry to Hatena Blog using AtomPub API."""
         if not self.hatena_id or not self.blog_id or not self.api_key or self.hatena_id.startswith("DUMMY"):
             print("Hatena API: Credentials not set or dummy mode. Skipping post.")
             print(f"--- DUMMY API POST ---")
             print(f"Blog ID: {self.blog_id}")
             print(f"Title: {title}")
-            print(f"Content:\n{html_content[:500]}...")
+            print(f"Content:\n{content[:500]}...")
             print(f"----------------------")
             return True
 
@@ -122,8 +122,8 @@ class HatenaAPI:
        xmlns:app="http://www.w3.org/2007/app">
   <title>{title}</title>
   <author><name>{self.hatena_id}</name></author>
-  <content type="text/html"><![CDATA[
-{html_content}
+  <content type="text/x-markdown"><![CDATA[
+{content}
   ]]></content>
   <app:control>
     <app:draft>{draft_val}</app:draft>
