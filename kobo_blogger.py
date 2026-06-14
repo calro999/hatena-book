@@ -272,34 +272,19 @@ def main():
     # Construct HTML article
     img_html = f'<div style="text-align: center; margin: 20px 0;"><img src="{uploaded_image_url}" alt="{target_item["title"]}" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.08);"></div>'
     
-    synopsis_html = f"""
-    <h3>公式あらすじ</h3>
-    <div style="background: #f9f9f9; padding: 18px 20px; border-left: 5px solid #0099FF; margin: 20px 0; line-height: 1.6; color: #444; border-radius: 0 8px 8px 0; font-size: 15px;">
-        {translated_synopsis}
-    </div>
-    """
+    synopsis_html = f"""<h3>公式あらすじ</h3>
+<div style="background: #f9f9f9; padding: 18px 20px; border-left: 5px solid #0099FF; margin: 20px 0; line-height: 1.6; color: #444; border-radius: 0 8px 8px 0; font-size: 15px;">
+{translated_synopsis}
+</div>"""
 
-    cta_html = f"""
-    <div style="text-align: center; margin: 40px 0 20px 0;">
-        <a href="{target_item['affiliateUrl']}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #0099FF; color: #fff; padding: 16px 32px; font-size: 18px; font-weight: bold; text-decoration: none; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,153,255,0.3); text-align: center;">
-            ＼ 今すぐ無料で試し読みする ／
-        </a>
-    </div>
-    """
+    cta_html = f"""<div style="text-align: center; margin: 40px 0 20px 0;">
+    <a href="{target_item['affiliateUrl']}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #0099FF; color: #fff; padding: 16px 32px; font-size: 18px; font-weight: bold; text-decoration: none; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,153,255,0.3); text-align: center;">
+        ＼ 今すぐ無料で試し読みする ／
+    </a>
+</div>"""
 
-    # Google Analytics Tag (Required)
-    ga_html = """<!-- Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NFPP76LS9J"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-NFPP76LS9J');
-    </script>
-    """
-
-    # Combine all parts with GA tag at the very top of HTML
-    article_content = f"{ga_html}\n{img_html}\n{llm_section}\n{synopsis_html}\n{cta_html}"
+    # Combine all parts (GA tag removed as requested)
+    article_content = f"{img_html}\n{llm_section}\n\n{synopsis_html}\n\n{cta_html}"
 
     # Generate appropriate blog title depending on genre
     if genre_name == "漫画":
