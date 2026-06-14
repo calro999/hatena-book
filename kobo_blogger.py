@@ -5,6 +5,7 @@ import urllib.request
 import urllib.parse
 import urllib.error
 import json
+import random
 from hatena_api import HatenaAPI
 from article_generator import ArticleGenerator
 from image_generator import ImageGenerator
@@ -21,7 +22,7 @@ def save_cache(item_number: str):
     with open(CACHE_FILE, "a", encoding="utf-8") as f:
         f.write(f"{item_number}\n")
 
-def fetch_kobo_items(app_id: str, access_key: str, affiliate_id: str, genre_id: str, keyword: str) -> list:
+def fetch_kobo_items(app_id: str, access_key: str, affiliate_id: str, genre_id: str, keyword: str, sort: str = "-releaseDate") -> list:
     """Fetches items from the latest Rakuten Kobo Ebook Search API."""
     if not app_id or app_id.startswith("DUMMY"):
         print("Rakuten App ID not set. Using mock data for local dry-run.")
@@ -33,8 +34,8 @@ def fetch_kobo_items(app_id: str, access_key: str, affiliate_id: str, genre_id: 
     params = {
         "applicationId": app_id,
         "affiliateId": affiliate_id,
-        "sort": "-releaseDate",
-        "hits": 5,
+        "sort": sort,
+        "hits": 30,
         "koboGenreId": genre_id,
         "format": "json"
     }
@@ -114,45 +115,101 @@ def main():
     if dry_run:
         print("Warning: HATENA_API_KEY is not set. Running in DRY-RUN/DEMO mode.")
 
-    # 2. Determine Genre by Current JST Hour
+    # 2. Genre Table (Mapped by JST hour: 0-23)
+    # koboGenreId values:
+    #   101101: 少年コミック, 101102: 少女コミック, 101103: 青年コミック, 101104: レディースコミック
+    #   101211: BL, 101212: TL
+    #   101901: 小説・ノンフィクション, 101903: ライトノベル
+    genre_table = {
+        0: {"genre_id": "101101", "keyword": "", "genre_name": "漫画", "display_name": "少年コミック", "category": "manga"},
+        1: {"genre_id": "101102", "keyword": "", "genre_name": "漫画", "display_name": "少女コミック", "category": "manga"},
+        2: {"genre_id": "101103", "keyword": "", "genre_name": "漫画", "display_name": "青年コミック", "category": "manga"},
+        3: {"genre_id": "101903", "keyword": "", "genre_name": "ラノベ・小説", "display_name": "ライトノベル", "category": "novel"},
+        4: {"genre_id": "101901", "keyword": "ミステリー", "genre_name": "ラノベ・小説", "display_name": "ミステリー小説", "category": "novel"},
+        5: {"genre_id": "101211", "keyword": "", "genre_name": "漫画", "display_name": "BL (ボーイズラブ)", "category": "manga"},
+        6: {"genre_id": "101212", "keyword": "", "genre_name": "漫画", "display_name": "TL (ティーンズラブ)", "category": "manga"},
+        7: {"genre_id": "101101", "keyword": "ファンタジー", "genre_name": "漫画", "display_name": "少年ファンタジー漫画", "category": "manga"},
+        8: {"genre_id": "101102", "keyword": "恋愛", "genre_name": "漫画", "display_name": "少女恋愛漫画", "category": "manga"},
+        9: {"genre_id": "101103", "keyword": "アクション", "genre_name": "漫画", "display_name": "青年アクション漫画", "category": "manga"},
+        10: {"genre_id": "101903", "keyword": "異世界", "genre_name": "ラノベ・小説", "display_name": "異世界ライトノベル", "category": "novel"},
+        11: {"genre_id": "101901", "keyword": "SF", "genre_name": "ラノベ・小説", "display_name": "SFファンタジー小説", "category": "novel"},
+        12: {"genre_id": "101101", "keyword": "", "genre_name": "漫画", "display_name": "少年コミック", "category": "manga"},
+        13: {"genre_id": "101102", "keyword": "", "genre_name": "漫画", "display_name": "少女コミック", "category": "manga"},
+        14: {"genre_id": "101103", "keyword": "", "genre_name": "漫画", "display_name": "青年コミック", "category": "manga"},
+        15: {"genre_id": "101903", "keyword": "", "genre_name": "ラノベ・小説", "display_name": "ライトノベル", "category": "novel"},
+        16: {"genre_id": "101901", "keyword": "ホラー", "genre_name": "ラノベ・小説", "display_name": "ホラー・サスペンス小説", "category": "novel"},
+        17: {"genre_id": "101211", "keyword": "", "genre_name": "漫画", "display_name": "BL (ボーイズラブ)", "category": "manga"},
+        18: {"genre_id": "101212", "keyword": "", "genre_name": "漫画", "display_name": "TL (ティーンズラブ)", "category": "manga"},
+        19: {"genre_id": "101101", "keyword": "冒険", "genre_name": "漫画", "display_name": "少年冒険漫画", "category": "manga"},
+        20: {"genre_id": "101102", "keyword": "ファンタジー", "genre_name": "漫画", "display_name": "少女ファンタジー漫画", "category": "manga"},
+        21: {"genre_id": "101103", "keyword": "SF", "genre_name": "漫画", "display_name": "青年SF漫画", "category": "manga"},
+        22: {"genre_id": "101903", "keyword": "ラブコメ", "genre_name": "ラノベ・小説", "display_name": "ラブコメライトノベル", "category": "novel"},
+        23: {"genre_id": "101901", "keyword": "推理", "genre_name": "ラノベ・小説", "display_name": "推理小説・ミステリー", "category": "novel"},
+    }
+
+    # 3. Determine Initial Genre by Current JST Hour
     timezone_jst = datetime.timezone(datetime.timedelta(hours=9))
     now_jst = datetime.datetime.now(timezone_jst)
     current_hour = now_jst.hour
     print(f"Current Time (JST): {now_jst.strftime('%Y-%m-%d %H:%M:%S')} (Hour: {current_hour})")
 
-    if current_hour % 2 != 0:
-        genre_id = "101"
-        keyword = ""
-        genre_name = "漫画"
-        print(f"JST Hour {current_hour} (Odd) -> Selected Genre: Comic (GenreId: {genre_id})")
-    else:
-        genre_id = "101903"
-        keyword = "ライトノベル"
-        genre_name = "ラノベ・小説"
-        print(f"JST Hour {current_hour} (Even) -> Selected Genre: Light Novel (GenreId: {genre_id}, Keyword: {keyword})")
+    selected_genre = genre_table.get(current_hour, genre_table[0])
+    genre_id = selected_genre["genre_id"]
+    keyword = selected_genre["keyword"]
+    genre_name = selected_genre["genre_name"]
+    display_name = selected_genre["display_name"]
+    category = selected_genre["category"]
+    
+    print(f"JST Hour {current_hour} -> Initial Selected Genre: {display_name} (GenreId: {genre_id}, Keyword: {keyword})")
 
-    # 3. Load Cache
+    # 4. Load Cache
     posted_cache = load_cache()
     print(f"Loaded {len(posted_cache)} posted items from cache.")
 
-    # 4. Fetch Items
-    items = fetch_kobo_items(rakuten_app_id, rakuten_access_key, rakuten_affiliate_id, genre_id, keyword)
-    if not items:
-        print("Error: No items fetched from Rakuten Kobo API.")
-        sys.exit(1)
-
-    print(f"Fetched {len(items)} items. Checking for new items...")
-
-    # 5. Filter Unposted Items
+    # 5. Fetch and Filter Loop (with fallback)
     target_item = None
-    for item in items:
-        item_num = item.get("itemNumber")
-        if item_num and item_num not in posted_cache:
-            target_item = item
-            break
+    max_retries = 5
+    current_genre_id = genre_id
+    current_keyword = keyword
+    current_sort = "-releaseDate"
+
+    for attempt in range(max_retries + 1):
+        print(f"--- Attempt {attempt} (Genre: {current_genre_id}, Keyword: '{current_keyword}', Sort: {current_sort}) ---")
+        items = fetch_kobo_items(rakuten_app_id, rakuten_access_key, rakuten_affiliate_id, current_genre_id, current_keyword, sort=current_sort)
+        
+        if items:
+            print(f"Fetched {len(items)} items. Checking for new items...")
+            for item in items:
+                item_num = item.get("itemNumber")
+                if item_num and item_num not in posted_cache:
+                    target_item = item
+                    break
+            
+            if target_item:
+                print(f"Found new item: {target_item['title']}")
+                break
+            else:
+                print("All fetched items in this query have already been posted.")
+        else:
+            print("No items fetched for this query.")
+        
+        # Setup fallback parameters for the next attempt
+        if attempt < max_retries:
+            # Alternate search options: Choose a random genre from the table
+            fallback_hour = random.choice(list(genre_table.keys()))
+            fallback_genre = genre_table[fallback_hour]
+            current_genre_id = fallback_genre["genre_id"]
+            current_keyword = fallback_genre["keyword"]
+            genre_name = fallback_genre["genre_name"]
+            display_name = fallback_genre["display_name"]
+            category = fallback_genre["category"]
+            
+            # Alternate sorting between sales, standard, and releaseDate
+            current_sort = random.choice(["-releaseDate", "sales", "standard"])
+            print(f"Switching to fallback settings: {display_name} sorted by {current_sort}")
 
     if not target_item:
-        print("All fetched items have already been posted. Nothing to do today.")
+        print("Error: Could not find any unposted items after all retries.")
         sys.exit(0)
 
     print(f"Selected Item to Post: {target_item['title']} (Number: {target_item['itemNumber']})")
@@ -164,7 +221,7 @@ def main():
     img_gen.generate_eyecatch(
         prompt=target_item["title"],
         output_path=eyecatch_path,
-        category="novel" if genre_name == "ラノベ・小説" else "manga"
+        category=category
     )
 
     # 7. Generate Article Content (Mapping to hatena-mono interface)
@@ -205,7 +262,7 @@ def main():
         print("Fotolife upload failed or skipped. Using Unsplash fallback in HTML.")
         uploaded_image_url = img_gen._select_unsplash_image_url(
             target_item["title"], 
-            category="novel" if genre_name == "ラノベ・小説" else "manga"
+            category=category
         )
 
     # Translate synopsis to Japanese and wrap in a styled div (avoiding blockquote overlap)
@@ -216,38 +273,41 @@ def main():
     img_html = f'<div style="text-align: center; margin: 20px 0;"><img src="{uploaded_image_url}" alt="{target_item["title"]}" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.08);"></div>'
     
     synopsis_html = f"""
-<h3>公式あらすじ</h3>
-<div style="background: #f9f9f9; padding: 18px 20px; border-left: 5px solid #0099FF; margin: 20px 0; line-height: 1.6; color: #444; border-radius: 0 8px 8px 0; font-size: 15px;">
-    {translated_synopsis}
-</div>
-"""
+    <h3>公式あらすじ</h3>
+    <div style="background: #f9f9f9; padding: 18px 20px; border-left: 5px solid #0099FF; margin: 20px 0; line-height: 1.6; color: #444; border-radius: 0 8px 8px 0; font-size: 15px;">
+        {translated_synopsis}
+    </div>
+    """
 
     cta_html = f"""
-<div style="text-align: center; margin: 40px 0 20px 0;">
-    <a href="{target_item['affiliateUrl']}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #0099FF; color: #fff; padding: 16px 32px; font-size: 18px; font-weight: bold; text-decoration: none; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,153,255,0.3); text-align: center;">
-        ＼ 今すぐ無料で試し読みする ／
-    </a>
-</div>
-"""
+    <div style="text-align: center; margin: 40px 0 20px 0;">
+        <a href="{target_item['affiliateUrl']}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #0099FF; color: #fff; padding: 16px 32px; font-size: 18px; font-weight: bold; text-decoration: none; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,153,255,0.3); text-align: center;">
+            ＼ 今すぐ無料で試し読みする ／
+        </a>
+    </div>
+    """
 
     # Google Analytics Tag (Required)
     ga_html = """<!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-NFPP76LS9J"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-NFPP76LS9J');
-</script>
-"""
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NFPP76LS9J"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-NFPP76LS9J');
+    </script>
+    """
 
     # Combine all parts with GA tag at the very top of HTML
     article_content = f"{ga_html}\n{img_html}\n{llm_section}\n{synopsis_html}\n{cta_html}"
 
+    # Generate appropriate blog title depending on genre
     if genre_name == "漫画":
         blog_title = f"【新刊情報】『{clean_title}』が発売開始！最新巻のあらすじ・見どころまとめ"
-    else:
+    elif "ライトノベル" in display_name or "ラノベ" in display_name:
         blog_title = f"【新作ラノベ】『{clean_title}』の見どころ・あらすじ紹介！本日より配信スタート"
+    else:
+        blog_title = f"【新作小説】『{clean_title}』の見どころ・あらすじ紹介！本日より配信スタート"
 
     # 9. Post to Hatena Blog
     success = hatena_client.post_entry(
