@@ -177,8 +177,50 @@ def generate_room_comment_with_llm(item):
     clean_title = title.replace("【", "").replace("】", "")[:50]
     return f"【おすすめ厳選アイテム】\n\n本当にセンス抜群でおすすめしたい素敵アイテムをご紹介します✨\nお買い物リストにぴったり🎀\n\n{clean_title}...\n\n#楽天市場 #お買い得 #おすすめ"
 
+def resolve_kobo_item_code(jan_code):
+    app_id = os.environ.get("RAKUTEN_APP_ID")
+    access_key = os.environ.get("RAKUTEN_ACCESS_KEY")
+    if not app_id:
+        return None
+    
+    print(f"Resolving Ichiba itemCode for Kobo JAN: {jan_code}...")
+    base_url = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20260401"
+    params = {
+        "applicationId": app_id,
+        "keyword": jan_code,
+        "format": "json",
+        "hits": 1
+    }
+    if access_key:
+        params["accessKey"] = access_key
+        
+    try:
+        url = f"{base_url}?{urllib.parse.urlencode(params)}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            items = data.get("Items", [])
+            if items:
+                item_data = items[0].get("Item", {})
+                resolved_code = item_data.get("itemCode")
+                if resolved_code:
+                    print(f"Successfully resolved itemCode: {resolved_code}")
+                    return resolved_code
+    except Exception as e:
+        print(f"Failed to resolve Kobo itemCode from Ichiba API: {e}")
+    return None
+
 
 def post_to_rakuten_room(item_code, comment):
+    # もし item_code が楽天市場の形式でない（コロンがない）場合、楽天市場APIでの解決を試みる
+    if item_code and ":" not in str(item_code):
+        resolved = resolve_kobo_item_code(item_code)
+        if resolved:
+            item_code = resolved
+        else:
+            print(f"Could not resolve itemCode for JAN {item_code}. Skipping Rakuten Room post.")
+            return
+
     room_session = os.environ.get("ROOM_SESSION_B64")
     hatena_session = os.environ.get("HATENA_SESSION_B64")
     
