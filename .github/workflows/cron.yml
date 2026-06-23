@@ -48,6 +48,7 @@ jobs:
         HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         ROOM_SESSION_B64: ${{ secrets.ROOM_SESSION_B64 }}
+        HATENA_SESSION_B64: ${{ secrets.HATENA_SESSION_B64 }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         python kobo_blogger.py
