@@ -61,10 +61,20 @@ def fetch_kobo_items(app_id: str, access_key: str, affiliate_id: str, genre_id: 
             for entry in data.get("Items", []):
                 item_data = entry.get("Item", {})
                 if item_data:
+                    base_item_url = item_data.get("itemUrl")
+                    if not base_item_url:
+                        aff_url = item_data.get("affiliateUrl") or ""
+                        base_item_url = aff_url.split("?")[0] if aff_url else ""
+
+                    final_affiliate_url = item_data.get("affiliateUrl")
+                    if affiliate_id and not affiliate_id.startswith("DUMMY") and base_item_url:
+                        encoded_pc_url = urllib.parse.quote(base_item_url)
+                        final_affiliate_url = f"https://hb.afl.rakuten.co.jp/hgc/{affiliate_id}/?pc={encoded_pc_url}"
+
                     items.append({
                         "title": item_data.get("title"),
                         "itemCaption": item_data.get("itemCaption", ""),
-                        "affiliateUrl": item_data.get("affiliateUrl"),
+                        "affiliateUrl": final_affiliate_url,
                         "itemNumber": item_data.get("itemNumber"),
                         "releaseDate": item_data.get("releaseDate")
                     })
