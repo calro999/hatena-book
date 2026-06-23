@@ -35,6 +35,9 @@ jobs:
         sudo apt-get update -qq
         sudo apt-get install -y -qq fonts-noto-cjk >/dev/null 2>&1
 
+    - name: Install Playwright Browsers
+      run: playwright install chromium
+
     - name: Run Kobo Blogger
       env:
         RAKUTEN_APP_ID: ${{ secrets.RAKUTEN_APP_ID }}
@@ -44,6 +47,7 @@ jobs:
         HATENA_BLOG_ID: ${{ secrets.HATENA_BLOG_ID }}
         HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        ROOM_SESSION_B64: ${{ secrets.ROOM_SESSION_B64 }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         python kobo_blogger.py
