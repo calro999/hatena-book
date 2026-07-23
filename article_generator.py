@@ -146,8 +146,86 @@ class ArticleGenerator:
                 print(f"Truncating AI meta-explanation found at marker: '{marker}'")
                 raw_article = raw_article.split(marker)[0].rstrip()
 
+        # Step 2: 誤字脱字チェック & SEO / AI-SEO / GEO ブラッシュアップ工程
+        polished_article = self.proofread_and_optimize(raw_article, title)
+        if polished_article and len(polished_article.strip()) > 200:
+            raw_article = polished_article
+
+        # Step 3: 途中切れ・力尽き防止チェック & 完結補正
+        raw_article = self.ensure_complete_article(raw_article, clean_title, url)
+
         # Return the raw Markdown content directly for Hatena Blog to render as Markdown
         return raw_article
+
+    def proofread_and_optimize(self, content: str, title: str) -> str:
+        """誤字脱字の最終チェックと、SEO, AI-SEO (AI検索対応), GEO (Generative Engine Optimization) 的なブラッシュアップを行う工程。"""
+        proofread_prompt = f"""以下のブログ原稿に対して、誤字脱字チェックとSEO・AI-SEO・GEO最適化を行い、最高品質の完成原稿にブラッシュアップしてください。
+
+【対象記事タイトル】: {title}
+
+【原稿】:
+{content}
+
+【ブラッシュアップ要件（絶対遵守）】:
+1. 誤字脱字・助詞の不自然さ・重複表現を完璧に校正してください。
+2. SEO & AI-SEO (GEO: Generative Engine Optimization) 最適化:
+   - AI検索エンジン（ChatGPT, Perplexity等）が要約・引用しやすいよう、見出し（##, ###）と箇条書きを活かした明確な構造にしてください。
+   - ポエムや抽象的な表現を排除し、作品の具体的な魅力・見どころ・ターゲット読者を明快に記述してください。
+3. 途中で途切れることのないよう、文末まで完全に完結させてください。
+4. 前置き・挨拶・解説・メタ発言は一切出力せず、本文のみ（Markdown形式）を出力してください。
+"""
+        generators = [
+            ("Gemini API (Proofread)", self._generate_with_gemini),
+            ("GitHub Models API (Proofread)", self._generate_with_github_models),
+            ("OpenRouter Free API (Proofread)", self._generate_with_openrouter),
+        ]
+
+        for name, gen_fn in generators:
+            try:
+                print(f"Attempting proofread and SEO/GEO optimization with {name}...")
+                res = gen_fn(proofread_prompt)
+                if res and len(res.strip()) > 200:
+                    res_cleaned = re.sub(r"^(はい、|承知いたしました。|以下が校正後の記事です。|以下がブラッシュアップ後の原稿です。)\s*", "", res.strip())
+                    print(f"Successfully proofread and optimized article with {name}!")
+                    return res_cleaned
+            except Exception as e:
+                print(f"Proofread failed with {name}: {e}. Continuing with next or original.")
+
+        return content
+
+    def ensure_complete_article(self, content: str, clean_title: str, url: str) -> str:
+        """文章が途中で力尽きて切れている場合に、末尾をきれいに修復・完結させる。"""
+        content = content.strip()
+        # 文末チェック (「。」「！」「？」や Markdown / HTML の正常な閉じ方)
+        valid_endings = ("。", "！", "？", "!", "?", "）", ")", "」", "』", "＞", ">")
+        
+        # 途中で切れている文や中途半端な見出しを削除/修正
+        lines = content.splitlines()
+        if lines:
+            last_line = lines[-1].strip()
+            # 最後の行が見出しのみ（例: ## などのみ）で力尽きている場合、その行を削除
+            if last_line.startswith("#") or last_line.startswith("<h"):
+                lines.pop()
+                content = "\n".join(lines).strip()
+
+        # 文末が不正で途切れている場合
+        if not content.endswith(valid_endings):
+            print("WARNING: Article detected as truncated/incomplete at the end. Truncating incomplete last sentence and adding smooth closing.")
+            # 最後の「。」の位置で切る
+            last_period = max(content.rfind("。"), content.rfind("！"), content.rfind("？"))
+            if last_period > len(content) * 0.6:
+                content = content[:last_period + 1]
+            else:
+                content = content + "。"
+
+        # CTAやアフィリエイトリンク・締め括りが存在しない場合は補完
+        if url and url not in content:
+            content += f"\n\n[楽天Koboで「{clean_title}」の電子書籍をチェックする]({url})"
+        
+        if "チェックしてみてください" not in content and "ご覧ください" not in content:
+            content += "\n\nぜひチェックしてみてください！"
+
+        return content
 
     def _generate_with_gemini(self, prompt: str) -> Optional[str]:
         api_key = os.environ.get("GEMINI_API_KEY")
@@ -164,7 +242,7 @@ class ArticleGenerator:
             }],
             "generationConfig": {
                 "temperature": 0.7,
-                "maxOutputTokens": 2000
+                "maxOutputTokens": 4000
             }
         }
         resp = requests.post(url, headers=headers, json=payload, timeout=30)
