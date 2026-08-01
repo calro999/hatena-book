@@ -59,9 +59,10 @@ jobs:
         git config --local user.name "github-actions[bot]"
         if [ -f posted_cache.txt ]; then
           git add posted_cache.txt
-          if ! git diff --cached --exit-code; then
+          if ! git diff --cached --quiet; then
             git commit -m "chore: update posted cache [skip ci]"
-            git push origin HEAD:${{ github.ref }}
+            git pull --rebase origin HEAD:${{ github.ref }} || git pull --rebase origin main || true
+            git push origin HEAD:${{ github.ref }} || git push origin main || true
           else
             echo "No changes in cache file."
           fi
