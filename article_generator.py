@@ -38,7 +38,7 @@ class ArticleGenerator:
             ("GitHub Models API (Free for Actions/PAT)", self._generate_with_github_models),
             ("OpenRouter Free API", self._generate_with_openrouter),
             ("Hugging Face API (Free Tier)", self._generate_with_huggingface),
-            ("Pollinations AI Free (No Key Required)", self._generate_with_pollinations),
+
         ]
 
         translated_text = None
@@ -96,7 +96,7 @@ class ArticleGenerator:
             ("GitHub Models API (Free for Actions/PAT)", self._generate_with_github_models),
             ("OpenRouter Free API", self._generate_with_openrouter),
             ("Hugging Face API (Free Tier)", self._generate_with_huggingface),
-            ("Pollinations AI Free (No Key Required)", self._generate_with_pollinations),
+
         ]
 
         raw_article = None
@@ -350,32 +350,4 @@ class ArticleGenerator:
             print(f"Hugging Face API returned status {resp.status_code}: {resp.text}")
         return None
 
-    def _generate_with_pollinations(self, prompt: str) -> Optional[str]:
-        """Pollinations AIのテキスト生成。異なるモデルでPOSTリトライして429を回避します。"""
-        url = "https://text.pollinations.ai/"
-        
-        # Try different free models on Pollinations to spread load and avoid 429
-        models = ["openai", "qwen", "mistral"]
-        
-        for attempt, model in enumerate(models):
-            payload = {
-                "messages": [
-                    {"role": "system", "content": "あなたは電子書籍紹介サイト「電子書籍チェッカー」のプロ書評ライターです。客観的な視点から、作品の見どころや魅力を整理し、読者が読みたくなるような書評・紹介記事を執筆してください。一人称や個人的な日記風のエピソードは一切排除し、丁寧な敬体（です・ます調）で執筆してください。指示されたルールを完全に守り、日本語で前置き・後書きなしでブログ本文のみを出力してください。"},
-                    {"role": "user", "content": prompt}
-                ],
-                "model": model
-            }
-            try:
-                print(f"Trying Pollinations AI POST (model: {model}, attempt: {attempt+1})...")
-                resp = requests.post(url, json=payload, timeout=25)
-                if resp.status_code == 200 and len(resp.text.strip()) > 300:
-                    return resp.text
-                elif resp.status_code == 429:
-                    print(f"Pollinations AI {model} returned 429. Waiting {attempt+2}s before trying next model...")
-                    time.sleep(attempt+2)
-                else:
-                    print(f"Pollinations AI {model} returned status {resp.status_code}")
-            except Exception as e:
-                print(f"Pollinations POST attempt for {model} failed: {e}")
-            
-        return None
+
