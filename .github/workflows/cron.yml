@@ -50,7 +50,9 @@ jobs:
         ROOM_SESSION_B64: ${{ secrets.ROOM_SESSION_B64 }}
         HATENA_SESSION_B64: ${{ secrets.HATENA_SESSION_B64 }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       run: |
         python kobo_blogger.py
 

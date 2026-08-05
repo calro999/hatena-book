@@ -6,6 +6,21 @@ import time
 import urllib.parse
 from typing import Dict, Any, Optional, List
 
+def sanitize_llm_output(content, valid_affiliate_url=""):
+    if not content:
+        return ""
+    import re
+    url_pattern = r'https?://[^\s"<>\'\)]+'
+    def replace_url(match):
+        found_url = match.group(0)
+        if "room.rakuten.co.jp" in found_url or "hb.afl.rakuten.co.jp" in found_url or ("rakuten.co.jp" in found_url and "affiliateId" in found_url) or "hatena.ne.jp" in found_url:
+            return found_url
+        return valid_affiliate_url if valid_affiliate_url else "https://room.rakuten.co.jp/jack555/items"
+    
+    sanitized = re.sub(url_pattern, replace_url, content)
+    sanitized = sanitized.replace("Amazon", "楽天市場").replace("アマゾン", "楽天市場").replace("ヤフー", "楽天市場").replace("Yahoo!", "楽天市場")
+    return sanitized
+
 class ArticleGenerator:
     def __init__(self, model_id: str = ""):
         pass
@@ -162,7 +177,7 @@ class ArticleGenerator:
         raw_article = self.ensure_complete_article(raw_article, clean_title, url)
 
         # Return the raw Markdown content directly for Hatena Blog to render as Markdown
-        return raw_article
+        return sanitize_llm_output(raw_article, url)
 
     def proofread_and_optimize(self, content: str, title: str) -> str:
         """誤字脱字の最終チェックと、SEO, AI-SEO (AI検索対応), GEO (Generative Engine Optimization) 的なブラッシュアップを行う工程。"""
