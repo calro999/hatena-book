@@ -122,7 +122,7 @@ class HatenaAPI:
        xmlns:app="http://www.w3.org/2007/app">
   <title>{title}</title>
   <author><name>{self.hatena_id}</name></author>
-  <content type="text/x-markdown"><![CDATA[
+  <content type="text/html"><![CDATA[
 {content}
   ]]></content>
   <app:control>
@@ -149,6 +149,13 @@ class HatenaAPI:
                 else:
                     print(f"Failed to post. Status code: {response.status}")
                     return False
+        except urllib.error.HTTPError as e:
+            try:
+                error_body = e.read().decode("utf-8")
+                print(f"Failed to post entry to Hatena Blog (HTTPError {e.code}): {error_body}")
+            except Exception:
+                print(f"Failed to post entry to Hatena Blog: {e}")
+            return False
         except Exception as e:
             print(f"Failed to post entry to Hatena Blog: {e}")
             return False

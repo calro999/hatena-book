@@ -292,14 +292,22 @@ def main():
 {translated_synopsis}
 </div>"""
 
-    cta_html = f"""<div style="text-align: center; margin: 40px 0 20px 0;">
-    <a href="{target_item['affiliateUrl']}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #0099FF; color: #fff; padding: 16px 32px; font-size: 18px; font-weight: bold; text-decoration: none; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,153,255,0.3); text-align: center;">
-        ＼ 今すぐ無料で試し読みする ／
-    </a>
-</div>"""
-
-    # Combine all parts (GA tag removed as requested)
-    article_content = f"{img_html}\n{llm_section}\n\n{synopsis_html}\n\n{cta_html}"
+    # Combine all parts
+    raw_article = f"{llm_section}\n\n{synopsis_html}\n\n{cta_html}"
+    
+    # Convert Markdown to HTML for Hatena Blog compatibility
+    import markdown
+    html_body = markdown.markdown(raw_article, extensions=['nl2br', 'tables'])
+    
+    # Force all <a> tags to open in a new tab (target="_blank" rel="noopener noreferrer")
+    def add_target_blank(match):
+        tag = match.group(0)
+        if 'target=' not in tag:
+            tag = tag.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ')
+        return tag
+        
+    html_body = re.sub(r'<a\s+[^>]*>', add_target_blank, html_body)
+    article_content = f"{img_html}\n{html_body}"
 
     # Generate appropriate blog title depending on genre
     if genre_name == "漫画":
