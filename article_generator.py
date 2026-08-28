@@ -49,12 +49,11 @@ class ArticleGenerator:
 """
 
         generators = [
-            ("Groq API", self._generate_with_groq),
             ("Gemini API (Free Tier)", self._generate_with_gemini),
+            ("Groq API", self._generate_with_groq),
             ("GitHub Models API (Free for Actions/PAT)", self._generate_with_github_models),
             ("OpenRouter Free API", self._generate_with_openrouter),
             ("Hugging Face API (Free Tier)", self._generate_with_huggingface),
-
         ]
 
         translated_text = None
@@ -108,12 +107,11 @@ class ArticleGenerator:
 
         # Trial order of Free LLM APIs
         generators = [
-            ("Groq API", self._generate_with_groq),
             ("Gemini API (Free Tier)", self._generate_with_gemini),
+            ("Groq API", self._generate_with_groq),
             ("GitHub Models API (Free for Actions/PAT)", self._generate_with_github_models),
             ("OpenRouter Free API", self._generate_with_openrouter),
             ("Hugging Face API (Free Tier)", self._generate_with_huggingface),
-
         ]
 
         raw_article = None
@@ -197,8 +195,8 @@ class ArticleGenerator:
 4. 前置き・挨拶・解説・メタ発言は一切出力せず、本文のみ（Markdown形式）を出力してください。
 """
         generators = [
-            ("Groq API", self._generate_with_groq),
             ("Gemini API (Proofread)", self._generate_with_gemini),
+            ("Groq API", self._generate_with_groq),
             ("GitHub Models API (Proofread)", self._generate_with_github_models),
             ("OpenRouter Free API (Proofread)", self._generate_with_openrouter),
         ]
@@ -255,28 +253,50 @@ class ArticleGenerator:
         if not api_key:
             return None
         
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        models = [
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-2.0-flash-lite",
+            "gemini-3.7-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
+            "gemini-3-flash",
+            "gemini-2.5-pro",
+            "gemini-3.1-pro"
+        ]
         headers = {"Content-Type": "application/json"}
-        payload = {
-            "contents": [{
-                "parts": [{
-                    "text": "あなたは電子書籍紹介サイト「電子書籍チェッカー」のプロ書評ライターです。客観的な視点から、作品の見どころや魅力を整理し、読者が読みたくなるような書評・紹介記事を執筆してください。一人称や個人的な日記風のエピソードは一切排除し、丁寧な敬体（です・ます調）で執筆してください。指示されたルールを完全に守り、余計な挨拶や解説を一切含まないブログ本文のみを出力します。\n\n" + prompt
-                }]
-            }],
-            "generationConfig": {
-                "temperature": 0.7,
-                "maxOutputTokens": 4000
-            }
-        }
-        resp = requests.post(url, headers=headers, json=payload, timeout=30)
-        if resp.status_code == 200:
-            data = resp.json()
+        for model_name in models:
             try:
-                return data["candidates"][0]["content"]["parts"][0]["text"]
-            except KeyError:
-                return None
-        else:
-            print(f"Gemini API returned status {resp.status_code}: {resp.text}")
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                payload = {
+                    "contents": [{
+                        "parts": [{
+                            "text": "あなたは電子書籍紹介サイト「電子書籍チェッカー」のプロ書評ライターです。客観的な視点から、作品の見どころや魅力を整理し、読者が読みたくなるような書評・紹介記事を執筆してください。一人称や個人的な日記風のエピソードは一切排除し、丁寧な敬体（です・ます調）で執筆してください。指示されたルールを完全に守り、余計な挨拶や解説を一切含まないブログ本文のみを出力します。\n\n" + prompt
+                        }]
+                    }],
+                    "generationConfig": {
+                        "temperature": 0.7,
+                        "maxOutputTokens": 4000
+                    }
+                }
+                if any(v in model_name for v in ["2.5", "3.", "3-"]):
+                    payload["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}
+                resp = requests.post(url, headers=headers, json=payload, timeout=30)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidate = data.get("candidates", [{}])[0]
+                    parts = candidate.get("content", {}).get("parts", [])
+                    text = "".join(p.get("text", "") for p in parts if p.get("text")).strip()
+                    if text and len(text) > 200:
+                        print(f"Successfully generated article via Gemini API ({model_name}).")
+                        return text
+                else:
+                    print(f"Gemini API ({model_name}) returned status {resp.status_code}: {resp.text[:100]}")
+            except Exception as e:
+                print(f"Gemini API ({model_name}) error: {e}")
         return None
 
     
