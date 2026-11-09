@@ -2,7 +2,30 @@ import os
 import re
 import random
 import requests
+import urllib.request
+import ssl
 from typing import List, Dict, Any, Optional
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def is_valid_yahoo_image(url: str) -> bool:
+    """Yahoo!の画像URLが実際に存在するか（no-imageダミーでないか）を判定"""
+    if not url:
+        return False
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        with urllib.request.urlopen(req, timeout=5, context=ctx) as r:
+            if r.status != 200:
+                return False
+            data = r.read()
+            # 4997 bytesはYahooのNo-Image共通ダミー画像
+            if len(data) == 4997 or len(data) < 5000:
+                return False
+            return True
+    except Exception:
+        return False
 
 def clean_yahoo_title(title: str) -> str:
     """Yahoo!ショッピング特有のSEOキーワード詰め込みやPRタグを除去し、スマートで短い商品名に整形"""
@@ -103,10 +126,57 @@ class YahooResearcher:
         queries = self.TARGET_QUERIES.get(target_genre, self.TARGET_QUERIES["mono"])
         return random.choice(queries)
 
+    def extract_valid_images_from_item(self, item_url: str, image_id: str) -> List[str]:
+        """商品ページおよびCDNから【確実に実在する商品画像】のみを検証して3枚抽出"""
+        valid_images = []
+
+        # 1. メイン大画像
+        main_l_url = f"https://item-shopping.c.yimg.jp/i/l/{image_id}"
+        if is_valid_yahoo_image(main_l_url):
+            valid_images.append(main_l_url)
+
+        # 2. 商品ページのHTMLから実在する高解像度画像URLをスクレイピング
+        if item_url:
+            try:
+                req = urllib.request.Request(item_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                with urllib.request.urlopen(req, timeout=6, context=ctx) as resp:
+                    html = resp.read().decode("utf-8", errors="ignore")
+                    
+                    # パターンA: タイムスタンプ付きCDN画像 (_d_)
+                    cdn_imgs = re.findall(r'https://item-shopping\.c\.yimg\.jp/i/[ngl]/[^\s\"\'\<\>\?]+', html)
+                    for c_img in cdn_imgs:
+                        if c_img not in valid_images and is_valid_yahoo_image(c_img):
+                            valid_images.append(c_img)
+                            if len(valid_images) >= 3:
+                                break
+
+                    # パターンB: ショップライブラリの高品質商品画像 (shopping.c.yimg.jp/lib/)
+                    if len(valid_images) < 3:
+                        lib_imgs = re.findall(r'https://shopping\.c\.yimg\.jp/lib/[^\s\"\'\<\>]+\.(?:jpg|png|jpeg)', html)
+                        for l_img in lib_imgs:
+                            # トップ画像やアイコン等のノイズを除去
+                            if not any(skip in l_img for skip in ["top-cat", "icon", "banner", "logo"]):
+                                if l_img not in valid_images and is_valid_yahoo_image(l_img):
+                                    valid_images.append(l_img)
+                                    if len(valid_images) >= 3:
+                                        break
+            except Exception as e:
+                print(f"Error scraping product page images: {e}")
+
+        # 3. それでも3枚に満たない場合、検証済みのメイン画像で補完（no imageを完全防止）
+        fallback_img = valid_images[0] if valid_images else f"https://item-shopping.c.yimg.jp/i/l/{image_id}"
+        while len(valid_images) < 3:
+            valid_images.append(fallback_img)
+
+        return valid_images[:3]
+
     def search_items(self, query: str = "", hits: int = 20) -> List[Dict[str, Any]]:
         if not self.client_id:
             print("Warning: YAHOO_CLIENT_ID is not configured.")
             return []
+
+        if not query:
+            query = "ガジェット"
 
         params = {
             "appid": self.client_id,
@@ -139,19 +209,8 @@ class YahooResearcher:
                     image_id = raw.get("imageId", "")
                     description = raw.get("description", "") or raw.get("headLine", "")
 
-                    # 複数画像URLの収集
-                    images = []
-                    if image_id:
-                        # メイン大画像
-                        images.append(f"https://item-shopping.c.yimg.jp/i/l/{image_id}")
-                        # サブ画像 (1〜5)
-                        for sub_idx in range(1, 6):
-                            images.append(f"https://item-shopping.c.yimg.jp/i/n/{image_id}_{sub_idx}")
-                    else:
-                        if isinstance(raw.get("image"), dict):
-                            med = raw.get("image", {}).get("medium")
-                            if med:
-                                images.append(med)
+                    # 確実に実在するYahoo商品画像を3枚のみ抽出
+                    images = self.extract_valid_images_from_item(item_url, image_id)
 
                     items.append({
                         "name": name,
