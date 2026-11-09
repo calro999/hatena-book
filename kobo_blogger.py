@@ -14,6 +14,8 @@ import requests
 from hatena_api import HatenaAPI
 from article_generator import ArticleGenerator
 from image_generator import ImageGenerator
+from yahoo_api import YahooBookAPI
+from toggle_mode import get_next_platform, save_current_platform
 
 CACHE_FILE = "posted_cache.txt"
 
@@ -121,10 +123,17 @@ def main():
     rakuten_app_id = os.environ.get("RAKUTEN_APP_ID", "DUMMY_APP_ID")
     rakuten_access_key = os.environ.get("RAKUTEN_ACCESS_KEY", "")
     rakuten_affiliate_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "DUMMY_AFFILIATE_ID")
+
+    yahoo_client_id = os.environ.get("YAHOO_CLIENT_ID", "")
+    yahoo_affiliate_id = os.environ.get("YAHOO_AFFILIATE_ID", "")
     
     hatena_id = os.environ.get("HATENA_ID", "DUMMY_HATENA_ID")
     blog_id = os.environ.get("HATENA_BLOG_ID", "book-muryo.hateblo.jp")
     hatena_api_key = os.environ.get("HATENA_API_KEY", "")
+
+    forced_platform = os.environ.get("POST_PLATFORM", "").strip().lower()
+    platform = get_next_platform(forced_platform)
+    print(f"Selected Platform for this run: {platform.upper()}")
 
     dry_run = not hatena_api_key or hatena_api_key.startswith("DUMMY")
     if dry_run:
@@ -181,47 +190,60 @@ def main():
     posted_cache = load_cache()
     print(f"Loaded {len(posted_cache)} posted items from cache.")
 
-    # 5. Fetch and Filter Loop (with fallback)
+    # 5. Fetch and Filter Loop (Rakuten or Yahoo)
     target_item = None
     max_retries = 5
-    current_genre_id = genre_id
-    current_keyword = keyword
-    current_sort = "-releaseDate"
 
-    for attempt in range(max_retries + 1):
-        print(f"--- Attempt {attempt} (Genre: {current_genre_id}, Keyword: '{current_keyword}', Sort: {current_sort}) ---")
-        items = fetch_kobo_items(rakuten_app_id, rakuten_access_key, rakuten_affiliate_id, current_genre_id, current_keyword, sort=current_sort)
-        
-        if items:
-            print(f"Fetched {len(items)} items. Checking for new items...")
-            for item in items:
-                item_num = item.get("itemNumber")
-                if item_num and item_num not in posted_cache:
-                    target_item = item
+    if platform == "yahoo" and yahoo_client_id:
+        print("--- Fetching items from Yahoo! Shopping (Books) ---")
+        yahoo_client = YahooBookAPI(client_id=yahoo_client_id, affiliate_id=yahoo_affiliate_id)
+        for attempt in range(max_retries + 1):
+            q, cat_hint = yahoo_client.generate_random_query()
+            print(f"--- Attempt {attempt} (Yahoo Query: '{q}') ---")
+            items = yahoo_client.search_items(query=q, hits=30)
+            if items:
+                random.shuffle(items)
+                for item in items:
+                    item_num = item.get("itemNumber")
+                    if item_num and item_num not in posted_cache:
+                        target_item = item
+                        category = item.get("category", "book")
+                        display_name = "話題の書籍・コミック"
+                        genre_name = "漫画" if category == "manga" else "小説"
+                        break
+            if target_item:
+                break
+    else:
+        if platform == "yahoo" and not yahoo_client_id:
+            print("YAHOO_CLIENT_ID not found. Falling back to Rakuten.")
+            platform = "rakuten"
+        print("--- Fetching items from Rakuten Kobo ---")
+        current_genre_id = genre_id
+        current_keyword = keyword
+        current_sort = "-releaseDate"
+
+        for attempt in range(max_retries + 1):
+            print(f"--- Attempt {attempt} (Genre: {current_genre_id}, Keyword: '{current_keyword}', Sort: {current_sort}) ---")
+            items = fetch_kobo_items(rakuten_app_id, rakuten_access_key, rakuten_affiliate_id, current_genre_id, current_keyword, sort=current_sort)
+            
+            if items:
+                for item in items:
+                    item_num = item.get("itemNumber")
+                    if item_num and item_num not in posted_cache:
+                        target_item = item
+                        break
+                if target_item:
                     break
             
-            if target_item:
-                print(f"Found new item: {target_item['title']}")
-                break
-            else:
-                print("All fetched items in this query have already been posted.")
-        else:
-            print("No items fetched for this query.")
-        
-        # Setup fallback parameters for the next attempt
-        if attempt < max_retries:
-            # Alternate search options: Choose a random genre from the table
-            fallback_hour = random.choice(list(genre_table.keys()))
-            fallback_genre = genre_table[fallback_hour]
-            current_genre_id = fallback_genre["genre_id"]
-            current_keyword = fallback_genre["keyword"]
-            genre_name = fallback_genre["genre_name"]
-            display_name = fallback_genre["display_name"]
-            category = fallback_genre["category"]
-            
-            # Alternate sorting between sales, standard, and releaseDate
-            current_sort = random.choice(["-releaseDate", "sales", "standard"])
-            print(f"Switching to fallback settings: {display_name} sorted by {current_sort}")
+            if attempt < max_retries:
+                fallback_hour = random.choice(list(genre_table.keys()))
+                fallback_genre = genre_table[fallback_hour]
+                current_genre_id = fallback_genre["genre_id"]
+                current_keyword = fallback_genre["keyword"]
+                genre_name = fallback_genre["genre_name"]
+                display_name = fallback_genre["display_name"]
+                category = fallback_genre["category"]
+                current_sort = random.choice(["-releaseDate", "sales", "standard"])
 
     if not target_item:
         print("Error: Could not find any unposted items after all retries.")
@@ -299,9 +321,18 @@ def main():
 {translated_synopsis}
 </div>"""
 
+    if platform == "yahoo":
+        cta_text = f"＼ Yahoo!ショッピングで『{clean_title}』を見る 🛒 ／"
+        cta_btn = "linear-gradient(135deg, #ff0033 0%, #ff334b 100%)"
+        cta_shadow = "rgba(255,0,51,0.3)"
+    else:
+        cta_text = "＼ 楽天Koboで今すぐ試し読みする 📖 ／"
+        cta_btn = "#0099FF"
+        cta_shadow = "rgba(0,153,255,0.3)"
+
     cta_html = f"""<div style="text-align: center; margin: 40px 0 20px 0;">
-    <a href="{target_item['affiliateUrl']}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: #0099FF; color: #fff; padding: 16px 32px; font-size: 18px; font-weight: bold; text-decoration: none; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,153,255,0.3); text-align: center;">
-        ＼ 今すぐ無料で試し読みする ／
+    <a href="{target_item['affiliateUrl']}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: {cta_btn}; color: #fff; padding: 16px 32px; font-size: 18px; font-weight: bold; text-decoration: none; border-radius: 30px; box-shadow: 0 4px 15px {cta_shadow}; text-align: center;">
+        {cta_text}
     </a>
 </div>"""
 
@@ -342,6 +373,8 @@ def main():
         if not dry_run:
             save_cache(target_item["itemNumber"])
             print(f"Added {target_item['itemNumber']} to posted cache.")
+        save_current_platform(platform)
+        print(f"Rotated platform state: last was {platform}")
     else:
         print("Failed to post entry.")
         sys.exit(1)
