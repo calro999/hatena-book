@@ -246,7 +246,14 @@ def main():
     
     title_raw = target_item["title"]
     import re
-    clean_title = re.sub(r'【[^】]+】|\[[^\]]+\]', '', title_raw).strip()
+    # 括弧やSEO記号・巻数等の長すぎる表記をきれいにクレンジング
+    cleaned = re.sub(r'\{[^}]*\}|【[^】]*】|\[[^\]]*\]|［[^］]*］|（[^）]*）|\([^)]*\)|〈[^〉]*〉|《[^》]*》', ' ', title_raw)
+    cleaned = re.sub(r'[★☆◆◇■□▲▼◎○〇♪!！?？※]+', ' ', cleaned)
+    cleaned = re.sub(r'送料無料|あす楽|即納|電子書籍|楽天Kobo|コミック|小説', ' ', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    clean_title = cleaned[:25].strip() if len(cleaned) > 25 else cleaned
+    if not clean_title:
+        clean_title = title_raw[:20].strip()
 
     # Construct the features list from itemCaption for article_generator.py to parse
     excerpt = target_item['itemCaption'][:150] + "..." if len(target_item['itemCaption']) > 150 else target_item['itemCaption']
