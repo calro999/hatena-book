@@ -1,0 +1,55 @@
+name: Yahoo Draft Article Generator
+
+on:
+  schedule:
+    - cron: '0 0,6,12 * * *'
+  workflow_dispatch:
+    inputs:
+      search_query:
+        description: '検索キーワード（空欄なら人気・売れ筋ワードから自動選定）'
+        required: false
+        default: ''
+
+jobs:
+  generate-draft:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: true
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Draft Generator
+      env:
+        YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
+        YAHOO_CLIENT_SECRET: ${{ secrets.YAHOO_CLIENT_SECRET }}
+        HATENA_ID: ${{ secrets.HATENA_ID }}
+        HATENA_BLOG_ID: ${{ secrets.HATENA_BLOG_ID }}
+        HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        SEARCH_QUERY: ${{ github.event.inputs.search_query || '' }}
+        TARGET_GENRE: 'book'
+      run: |
+        python draft_poster.py
+
+    - name: Commit and push draft cache
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add draft_cache.txt || true
+        if ! git diff --cached --quiet; then
+          git commit -m "chore: update draft cache [skip ci]"
+          git pull --rebase origin main || true
+          git push origin main || true
+        fi
