@@ -3,25 +3,16 @@ import os
 MODE_FILE = "post_mode.txt"
 
 def get_next_platform(override_platform: str = "") -> str:
-    """楽天とYahooを1回ずつ交互に切り替える（13楽天 + 13Yahoo = 26回/日）"""
+    """
+    バリューコマース連携待機中のため、デフォルトは確実に成果報酬の入る「rakuten」固定。
+    環境変数 POST_PLATFORM または post_mode.txt が 'yahoo' の場合、あるいは
+    override_platform が 'yahoo' の場合のみ Yahoo を使用可能。
+    """
     if override_platform in ["rakuten", "yahoo"]:
         return override_platform
     
-    current_mode = "yahoo"
-    if os.path.exists(MODE_FILE):
-        try:
-            with open(MODE_FILE, "r", encoding="utf-8") as f:
-                content = f.read().strip().lower()
-                if content == "rakuten":
-                    current_mode = "yahoo"
-                else:
-                    current_mode = "rakuten"
-        except Exception:
-            current_mode = "rakuten"
-    else:
-        current_mode = "rakuten"
-        
-    return current_mode
+    # 明示的な指定がなければ楽天のみで運用
+    return "rakuten"
 
 def save_current_platform(platform: str):
     """実行したプラットフォームを記録"""
