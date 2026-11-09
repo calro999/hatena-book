@@ -2,6 +2,7 @@ name: Yahoo Research Hatena Draft Generator
 
 on:
   schedule:
+    # 毎日下書きを自動ストック (例: 09:00, 15:00, 21:00 JST)
     - cron: '0 0,6,12 * * *'
   workflow_dispatch:
     inputs:
@@ -15,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      models: read
 
     steps:
     - name: Checkout repository
