@@ -2,9 +2,14 @@ name: Yahoo Draft Article Generator
 
 on:
   schedule:
-    - cron: '21 */2 * * *'
+    # 毎時実行（1時間おきに実行して下書きを確実に大量ストック）
+    - cron: '21 * * * *'
   workflow_dispatch:
     inputs:
+      num_drafts:
+        description: '作成する下書き記事件数（デフォルト: 3）'
+        required: false
+        default: '3'
       search_query:
         description: '検索キーワード（空欄なら人気・売れ筋ワードから自動選定）'
         required: false
@@ -39,6 +44,7 @@ jobs:
         HATENA_API_KEY: ${{ secrets.HATENA_API_KEY }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         SEARCH_QUERY: ${{ github.event.inputs.search_query || '' }}
+        NUM_DRAFTS: ${{ github.event.inputs.num_drafts || '3' }}
         TARGET_GENRE: 'book'
       run: |
         python draft_poster.py
