@@ -19,8 +19,7 @@ def save_cache(code: str):
     if not code:
         return
     with open(CACHE_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{code}
-")
+        f.write(code + "\n")
 
 def main():
     print("=== Starting Hatena Draft Article Generator ===")
@@ -33,7 +32,6 @@ def main():
     target_genre = os.environ.get("TARGET_GENRE", "mono").strip().lower()
     search_query = os.environ.get("SEARCH_QUERY", "").strip()
     
-    # 1回のワークフロー実行で作成・ストックする下書き記事件数（デフォルト: 3記事）
     num_drafts = int(os.environ.get("NUM_DRAFTS", "3"))
 
     if not yahoo_client_id:
@@ -57,8 +55,7 @@ def main():
     successful_drafts = 0
 
     for draft_idx in range(num_drafts):
-        print(f"
---- [Draft {draft_idx + 1}/{num_drafts}] Searching Item ---")
+        print(f"\n--- [Draft {draft_idx + 1}/{num_drafts}] Searching Item ---")
         target_item = None
         max_retries = 8
 
@@ -114,8 +111,7 @@ def main():
         if draft_idx < num_drafts - 1:
             time.sleep(3)
 
-    print(f"
-=== Draft Generation Finished: {successful_drafts}/{num_drafts} drafts created ===")
+    print(f"\n=== Draft Generation Finished: {successful_drafts}/{num_drafts} drafts created ===")
     if successful_drafts == 0:
         sys.exit(1)
 
