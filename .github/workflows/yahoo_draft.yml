@@ -2,7 +2,7 @@ name: Yahoo Draft Article Generator
 
 on:
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '21 */2 * * *'
   workflow_dispatch:
     inputs:
       search_query:
