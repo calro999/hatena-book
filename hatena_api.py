@@ -106,7 +106,9 @@ class HatenaAPI:
             print(f"Failed to upload image to Hatena Fotolife: {e}")
             return None
 
-    def post_entry(self, title: str, html_content: str, is_draft: bool = False) -> Optional[str]:
+    def post_entry(self, title: str, html_content: str = "", is_draft: bool = False, content: str = "") -> Optional[str]:
+        if not html_content and content:
+            html_content = content
         """
         Posts an entry to Hatena Blog using AtomPub API.
         Returns the published entry URL (str) if successful, or None if failed.
