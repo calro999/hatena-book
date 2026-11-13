@@ -1,3 +1,5 @@
+from typing import Optional, Set, Dict, Any
+import time
 import base64
 import tempfile
 from playwright.sync_api import sync_playwright
@@ -116,87 +118,46 @@ def get_mock_items(genre_id: str) -> list:
             }
         ]
 
-def main():
-    print("=== Starting Rakuten Kobo Hatena Blog Poster ===")
-    
-    # 1. Configurations
-    rakuten_app_id = os.environ.get("RAKUTEN_APP_ID", "DUMMY_APP_ID")
-    rakuten_access_key = os.environ.get("RAKUTEN_ACCESS_KEY", "")
-    rakuten_affiliate_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "DUMMY_AFFILIATE_ID")
+def post_single_article(
+    post_index: int,
+    total_posts: int,
+    posted_cache: set,
+    hatena_client: HatenaAPI,
+    article_gen: ArticleGenerator,
+    img_gen: ImageGenerator,
+    genre_table: dict,
+    rakuten_app_id: str,
+    rakuten_access_key: str,
+    rakuten_affiliate_id: str,
+    yahoo_client: Optional[YahooBookAPI],
+    forced_platform: str,
+    dry_run: bool
+) -> bool:
+    print(f"\n==================================================")
+    print(f"=== Starting Book Post Batch [{post_index}/{total_posts}] ===")
+    print(f"==================================================")
 
-    yahoo_client_id = os.environ.get("YAHOO_CLIENT_ID", "")
-    yahoo_affiliate_id = os.environ.get("YAHOO_AFFILIATE_ID", "")
-    
-    hatena_id = os.environ.get("HATENA_ID", "DUMMY_HATENA_ID")
-    blog_id = os.environ.get("HATENA_BLOG_ID", "book-muryo.hateblo.jp")
-    hatena_api_key = os.environ.get("HATENA_API_KEY", "")
-
-    forced_platform = os.environ.get("POST_PLATFORM", "").strip().lower()
     platform = get_next_platform(forced_platform)
-    print(f"Selected Platform for this run: {platform.upper()}")
+    print(f"Selected Platform for Post #{post_index}: {platform.upper()}")
 
-    dry_run = not hatena_api_key or hatena_api_key.startswith("DUMMY")
-    if dry_run:
-        print("Warning: HATENA_API_KEY is not set. Running in DRY-RUN/DEMO mode.")
-
-    # 2. Genre Table (Mapped by JST hour: 0-23)
-    # koboGenreId values:
-    #   101101: 少年コミック, 101102: 少女コミック, 101103: 青年コミック, 101104: レディースコミック
-    #   101211: BL, 101212: TL
-    #   101901: 小説・ノンフィクション, 101903: ライトノベル
-    genre_table = {
-        0: {"genre_id": "101", "keyword": "少年コミック", "genre_name": "漫画", "display_name": "少年コミック", "category": "manga"},
-        1: {"genre_id": "101", "keyword": "少女コミック", "genre_name": "漫画", "display_name": "少女コミック", "category": "manga"},
-        2: {"genre_id": "101", "keyword": "青年コミック", "genre_name": "漫画", "display_name": "青年コミック", "category": "manga"},
-        3: {"genre_id": "101903", "keyword": "", "genre_name": "ラノベ・小説", "display_name": "ライトノベル", "category": "novel"},
-        4: {"genre_id": "101901", "keyword": "ミステリー", "genre_name": "ラノベ・小説", "display_name": "ミステリー小説", "category": "novel"},
-        5: {"genre_id": "101", "keyword": "BL", "genre_name": "漫画", "display_name": "BL (ボーイズラブ)", "category": "manga"},
-        6: {"genre_id": "101", "keyword": "TL", "genre_name": "漫画", "display_name": "TL (ティーンズラブ)", "category": "manga"},
-        7: {"genre_id": "101", "keyword": "少年コミック ファンタジー", "genre_name": "漫画", "display_name": "少年ファンタジー漫画", "category": "manga"},
-        8: {"genre_id": "101", "keyword": "少女コミック 恋愛", "genre_name": "漫画", "display_name": "少女恋愛漫画", "category": "manga"},
-        9: {"genre_id": "101", "keyword": "青年コミック アクション", "genre_name": "漫画", "display_name": "青年アクション漫画", "category": "manga"},
-        10: {"genre_id": "101903", "keyword": "異世界", "genre_name": "ラノベ・小説", "display_name": "異世界ライトノベル", "category": "novel"},
-        11: {"genre_id": "101901", "keyword": "SF", "genre_name": "ラノベ・小説", "display_name": "SFファンタジー小説", "category": "novel"},
-        12: {"genre_id": "101", "keyword": "少年コミック", "genre_name": "漫画", "display_name": "少年コミック", "category": "manga"},
-        13: {"genre_id": "101", "keyword": "少女コミック", "genre_name": "漫画", "display_name": "少女コミック", "category": "manga"},
-        14: {"genre_id": "101", "keyword": "青年コミック", "genre_name": "漫画", "display_name": "青年コミック", "category": "manga"},
-        15: {"genre_id": "101903", "keyword": "", "genre_name": "ラノベ・小説", "display_name": "ライトノベル", "category": "novel"},
-        16: {"genre_id": "101901", "keyword": "ホラー", "genre_name": "ラノベ・小説", "display_name": "ホラー・サスペンス小説", "category": "novel"},
-        17: {"genre_id": "101", "keyword": "BL", "genre_name": "漫画", "display_name": "BL (ボーイズラブ)", "category": "manga"},
-        18: {"genre_id": "101", "keyword": "TL", "genre_name": "漫画", "display_name": "TL (ティーンズラブ)", "category": "manga"},
-        19: {"genre_id": "101", "keyword": "少年コミック 冒険", "genre_name": "漫画", "display_name": "少年冒険漫画", "category": "manga"},
-        20: {"genre_id": "101", "keyword": "少女コミック ファンタジー", "genre_name": "漫画", "display_name": "少女ファンタジー漫画", "category": "manga"},
-        21: {"genre_id": "101", "keyword": "青年コミック SF", "genre_name": "漫画", "display_name": "青年SF漫画", "category": "manga"},
-        22: {"genre_id": "101903", "keyword": "ラブコメ", "genre_name": "ラノベ・小説", "display_name": "ラブコメライトノベル", "category": "novel"},
-        23: {"genre_id": "101901", "keyword": "推理", "genre_name": "ラノベ・小説", "display_name": "推理小説・ミステリー", "category": "novel"},
-    }
-
-    # 3. Determine Initial Genre by Current JST Hour
+    # Determine Genre by Current JST Hour (with offset for post 2 to vary genres)
     timezone_jst = datetime.timezone(datetime.timedelta(hours=9))
     now_jst = datetime.datetime.now(timezone_jst)
-    current_hour = now_jst.hour
-    print(f"Current Time (JST): {now_jst.strftime('%Y-%m-%d %H:%M:%S')} (Hour: {current_hour})")
+    target_hour = (now_jst.hour + (post_index - 1) * 3) % 24
+    print(f"Target JST Hour for post #{post_index}: {target_hour}")
 
-    selected_genre = genre_table.get(current_hour, genre_table[0])
+    selected_genre = genre_table.get(target_hour, genre_table[0])
     genre_id = selected_genre["genre_id"]
     keyword = selected_genre["keyword"]
     genre_name = selected_genre["genre_name"]
     display_name = selected_genre["display_name"]
     category = selected_genre["category"]
-    
-    print(f"JST Hour {current_hour} -> Initial Selected Genre: {display_name} (GenreId: {genre_id}, Keyword: {keyword})")
 
-    # 4. Load Cache
-    posted_cache = load_cache()
-    print(f"Loaded {len(posted_cache)} posted items from cache.")
-
-    # 5. Fetch and Filter Loop (Rakuten or Yahoo)
     target_item = None
     max_retries = 5
 
-    if platform == "yahoo" and yahoo_client_id:
+    if platform == "yahoo" and yahoo_client:
         print("--- Fetching items from Yahoo! Shopping (Books) ---")
-        yahoo_client = YahooBookAPI(client_id=yahoo_client_id, affiliate_id=yahoo_affiliate_id)
         for attempt in range(max_retries + 1):
             q, cat_hint = yahoo_client.generate_random_query()
             print(f"--- Attempt {attempt} (Yahoo Query: '{q}') ---")
@@ -214,7 +175,7 @@ def main():
             if target_item:
                 break
     else:
-        if platform == "yahoo" and not yahoo_client_id:
+        if platform == "yahoo" and not yahoo_client:
             print("YAHOO_CLIENT_ID not found. Falling back to Rakuten.")
             platform = "rakuten"
         print("--- Fetching items from Rakuten Kobo ---")
@@ -246,29 +207,22 @@ def main():
                 current_sort = random.choice(["-releaseDate", "sales", "standard"])
 
     if not target_item:
-        print("Error: Could not find any unposted items after all retries.")
-        sys.exit(0)
+        print(f"Warning: Could not find any unposted items for Post #{post_index}.")
+        return False
 
     print(f"Selected Item to Post: {target_item['title']} (Number: {target_item['itemNumber']})")
 
-    # 6. Generate Eyecatch Image
-    print("Generating Eyecatch Image...")
-    img_gen = ImageGenerator()
-    eyecatch_path = "eyecatch.png"
+    # Eyecatch Image
+    eyecatch_path = f"eyecatch_{post_index}.png"
     img_gen.generate_eyecatch(
         prompt=target_item["title"],
         output_path=eyecatch_path,
         category=category
     )
 
-    # 7. Generate Article Content (Mapping to hatena-mono interface)
-    print("Generating Article Content using LLM...")
-    article_gen = ArticleGenerator()
-    article_gen.load_model()
-    
+    # Article Generation
     title_raw = target_item["title"]
     import re
-    # 括弧やSEO記号・巻数等の長すぎる表記をきれいにクレンジング
     cleaned = re.sub(r'\{[^}]*\}|【[^】]*】|\[[^\]]*\]|［[^］]*］|（[^）]*）|\([^)]*\)|〈[^〉]*〉|《[^》]*》', ' ', title_raw)
     cleaned = re.sub(r'[★☆◆◇■□▲▼◎○〇♪!！?？※]+', ' ', cleaned)
     cleaned = re.sub(r'送料無料|あす楽|即納|電子書籍|楽天Kobo|コミック|小説', ' ', cleaned, flags=re.IGNORECASE)
@@ -277,7 +231,6 @@ def main():
     if not clean_title:
         clean_title = title_raw[:20].strip()
 
-    # Construct the features list from itemCaption for article_generator.py to parse
     excerpt = target_item['itemCaption'][:150] + "..." if len(target_item['itemCaption']) > 150 else target_item['itemCaption']
     mapped_features = [
         f"最新刊・注目作品『{clean_title}』の配信スタート",
@@ -294,26 +247,15 @@ def main():
     
     llm_section = article_gen.generate_review_article(generator_input_item)
 
-    # 8. Setup Hatena Client and Upload Eyecatch
-    hatena_client = HatenaAPI(
-        hatena_id=hatena_id,
-        blog_id=blog_id,
-        api_key=hatena_api_key
-    )
-
     uploaded_image_url = hatena_client.upload_image_to_fotolife(eyecatch_path)
     if not uploaded_image_url:
-        print("Fotolife upload failed or skipped. Using Unsplash fallback in HTML.")
         uploaded_image_url = img_gen._select_unsplash_image_url(
             target_item["title"], 
             category=category
         )
 
-    # Translate synopsis to Japanese and wrap in a styled div (avoiding blockquote overlap)
-    print("Translating/formatting synopsis...")
     translated_synopsis = article_gen.translate_synopsis(target_item['itemCaption'])
 
-    # Construct HTML article
     img_html = f'<div style="text-align: center; margin: 20px 0;"><img src="{uploaded_image_url}" alt="{target_item["title"]}" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.08);"></div>'
 
     synopsis_html = f"""<h3>公式あらすじ</h3>
@@ -336,14 +278,11 @@ def main():
     </a>
 </div>"""
 
-    # Combine all parts
     raw_article = f"{llm_section}\n\n{synopsis_html}\n\n{cta_html}"
     
-    # Convert Markdown to HTML for Hatena Blog compatibility
     import markdown
     html_body = markdown.markdown(raw_article, extensions=['nl2br', 'tables'])
     
-    # Force all <a> tags to open in a new tab (target="_blank" rel="noopener noreferrer")
     def add_target_blank(match):
         tag = match.group(0)
         if 'target=' not in tag:
@@ -353,15 +292,15 @@ def main():
     html_body = re.sub(r'<a\s+[^>]*>', add_target_blank, html_body)
     article_content = f"{img_html}\n{html_body}"
 
-    # Generate appropriate blog title depending on genre
-    if genre_name == "漫画":
-        blog_title = f"【新刊情報】『{clean_title}』が発売開始！最新巻のあらすじ・見どころまとめ"
-    elif "ライトノベル" in display_name or "ラノベ" in display_name:
-        blog_title = f"【新作ラノベ】『{clean_title}』の見どころ・あらすじ紹介！本日より配信スタート"
-    else:
-        blog_title = f"【新作小説】『{clean_title}』の見どころ・あらすじ紹介！本日より配信スタート"
+    # タイトルのテンプレート重複を防止し自然なバリエーションを生成
+    title_templates = [
+        f"『{clean_title}』の見どころと魅力を徹底解説！今すぐ読みたいおすすめポイントまとめ",
+        f"話題の注目作『{clean_title}』をピックアップ！あらすじとおすすめポイント紹介",
+        f"『{clean_title}』配信スタート！物語の見どころと注目ポイントまとめ",
+        f"一気読み必至！『{clean_title}』のあらすじと見どころを分かりやすく解説"
+    ]
+    blog_title = random.choice(title_templates)
 
-    # 9. Post to Hatena Blog
     success = hatena_client.post_entry(
         title=blog_title,
         content=article_content,
@@ -369,17 +308,119 @@ def main():
     )
 
     if success:
-        print("Successfully posted to Hatena Blog!")
+        print(f"Successfully posted Post #{post_index} to Hatena Blog!")
         if not dry_run:
             save_cache(target_item["itemNumber"])
+            posted_cache.add(target_item["itemNumber"])
             print(f"Added {target_item['itemNumber']} to posted cache.")
         save_current_platform(platform)
         print(f"Rotated platform state: last was {platform}")
-    else:
-        print("Failed to post entry.")
-        sys.exit(1)
 
-    print("=== Auto Post Process Completed! ===")
+        if os.path.exists(eyecatch_path):
+            try:
+                os.remove(eyecatch_path)
+            except Exception:
+                pass
+
+        return True
+    else:
+        print(f"Failed to post entry for Post #{post_index}.")
+        return False
+
+def main():
+    print("=== Starting Rakuten Kobo Hatena Blog Poster ===")
+    
+    # 1. Configurations
+    rakuten_app_id = os.environ.get("RAKUTEN_APP_ID", "DUMMY_APP_ID")
+    rakuten_access_key = os.environ.get("RAKUTEN_ACCESS_KEY", "")
+    rakuten_affiliate_id = os.environ.get("RAKUTEN_AFFILIATE_ID", "DUMMY_AFFILIATE_ID")
+
+    yahoo_client_id = os.environ.get("YAHOO_CLIENT_ID", "")
+    yahoo_affiliate_id = os.environ.get("YAHOO_AFFILIATE_ID", "")
+    
+    hatena_id = os.environ.get("HATENA_ID", "DUMMY_HATENA_ID")
+    blog_id = os.environ.get("HATENA_BLOG_ID", "book-muryo.hateblo.jp")
+    hatena_api_key = os.environ.get("HATENA_API_KEY", "")
+
+    forced_platform = os.environ.get("POST_PLATFORM", "").strip().lower()
+
+    dry_run = not hatena_api_key or hatena_api_key.startswith("DUMMY")
+    if dry_run:
+        print("Warning: HATENA_API_KEY is not set. Running in DRY-RUN/DEMO mode.")
+
+    genre_table = {
+        0: {"genre_id": "101", "keyword": "少年コミック", "genre_name": "漫画", "display_name": "少年コミック", "category": "manga"},
+        1: {"genre_id": "101", "keyword": "少女コミック", "genre_name": "漫画", "display_name": "少女コミック", "category": "manga"},
+        2: {"genre_id": "101", "keyword": "青年コミック", "genre_name": "漫画", "display_name": "青年コミック", "category": "manga"},
+        3: {"genre_id": "101903", "keyword": "", "genre_name": "ラノベ・小説", "display_name": "ライトノベル", "category": "novel"},
+        4: {"genre_id": "101901", "keyword": "ミステリー", "genre_name": "ラノベ・小説", "display_name": "ミステリー小説", "category": "novel"},
+        5: {"genre_id": "101", "keyword": "BL", "genre_name": "漫画", "display_name": "BL (ボーイズラブ)", "category": "manga"},
+        6: {"genre_id": "101", "keyword": "TL", "genre_name": "漫画", "display_name": "TL (ティーンズラブ)", "category": "manga"},
+        7: {"genre_id": "101", "keyword": "少年コミック ファンタジー", "genre_name": "漫画", "display_name": "少年ファンタジー漫画", "category": "manga"},
+        8: {"genre_id": "101", "keyword": "少女コミック 恋愛", "genre_name": "漫画", "display_name": "少女恋愛漫画", "category": "manga"},
+        9: {"genre_id": "101", "keyword": "青年コミック アクション", "genre_name": "漫画", "display_name": "青年アクション漫画", "category": "manga"},
+        10: {"genre_id": "101903", "keyword": "異世界", "genre_name": "ラノベ・小説", "display_name": "異世界ライトノベル", "category": "novel"},
+        11: {"genre_id": "101901", "keyword": "SF", "genre_name": "ラノベ・小説", "display_name": "SFファンタジー小説", "category": "novel"},
+        12: {"genre_id": "101", "keyword": "少年コミック", "genre_name": "漫画", "display_name": "少年コミック", "category": "manga"},
+        13: {"genre_id": "101", "keyword": "少女コミック", "genre_name": "漫画", "display_name": "少女コミック", "category": "manga"},
+        14: {"genre_id": "101", "keyword": "青年コミック", "genre_name": "漫画", "display_name": "青年コミック", "category": "manga"},
+        15: {"genre_id": "101903", "keyword": "", "genre_name": "ラノベ・小説", "display_name": "ライトノベル", "category": "novel"},
+        16: {"genre_id": "101901", "keyword": "ホラー", "genre_name": "ラノベ・小説", "display_name": "ホラー・サスペンス小説", "category": "novel"},
+        17: {"genre_id": "101", "keyword": "BL", "genre_name": "漫画", "display_name": "BL (ボーイズラブ)", "category": "manga"},
+        18: {"genre_id": "101", "keyword": "TL", "genre_name": "漫画", "display_name": "TL (ティーンズラブ)", "category": "manga"},
+        19: {"genre_id": "101", "keyword": "少年コミック 冒険", "genre_name": "漫画", "display_name": "少年冒険漫画", "category": "manga"},
+        20: {"genre_id": "101", "keyword": "少女コミック ファンタジー", "genre_name": "漫画", "display_name": "少女ファンタジー漫画", "category": "manga"},
+        21: {"genre_id": "101", "keyword": "青年コミック SF", "genre_name": "漫画", "display_name": "青年SF漫画", "category": "manga"},
+        22: {"genre_id": "101903", "keyword": "ラブコメ", "genre_name": "ラノベ・小説", "display_name": "ラブコメライトノベル", "category": "novel"},
+        23: {"genre_id": "101901", "keyword": "推理", "genre_name": "ラノベ・小説", "display_name": "推理小説・ミステリー", "category": "novel"},
+    }
+
+    posted_cache = load_cache()
+    print(f"Loaded {len(posted_cache)} posted items from cache.")
+
+    yahoo_client = None
+    if yahoo_client_id:
+        yahoo_client = YahooBookAPI(client_id=yahoo_client_id, affiliate_id=yahoo_affiliate_id)
+
+    hatena_client = HatenaAPI(
+        hatena_id=hatena_id,
+        blog_id=blog_id,
+        api_key=hatena_api_key
+    )
+
+    img_gen = ImageGenerator()
+    article_gen = ArticleGenerator()
+    article_gen.load_model()
+
+    posts_per_run = int(os.environ.get("POSTS_PER_RUN", "2"))
+    successful_posts = 0
+
+    for idx in range(1, posts_per_run + 1):
+        success = post_single_article(
+            post_index=idx,
+            total_posts=posts_per_run,
+            posted_cache=posted_cache,
+            hatena_client=hatena_client,
+            article_gen=article_gen,
+            img_gen=img_gen,
+            genre_table=genre_table,
+            rakuten_app_id=rakuten_app_id,
+            rakuten_access_key=rakuten_access_key,
+            rakuten_affiliate_id=rakuten_affiliate_id,
+            yahoo_client=yahoo_client,
+            forced_platform=forced_platform,
+            dry_run=dry_run
+        )
+        if success:
+            successful_posts += 1
+
+        if idx < posts_per_run:
+            print(f"Waiting 15 seconds before next post...")
+            time.sleep(15)
+
+    print(f"\n=== Auto Post Process Completed: {successful_posts}/{posts_per_run} posts published successfully ===")
+    if successful_posts == 0:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
