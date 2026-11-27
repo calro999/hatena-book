@@ -15,30 +15,36 @@ class ImageGenerator:
     def generate_eyecatch(self, prompt: str, output_path: str = "eyecatch.png", image_url: Optional[str] = None, category: Optional[str] = None) -> str:
         # Title clean up
         clean_title = prompt
-        # We can clean brackets and simple prefixes/suffixes
         import re
         clean_title = re.sub(r'【[^】]+】|\[[^\]]+\]', '', clean_title).strip()
         
-        # 1. Select the best photo from Unsplash
-        unsplash_url = self._select_unsplash_image_url(clean_title, category)
-        print(f"Selected base image URL: {unsplash_url}")
+        # 1. 書籍表紙画像URL（楽天Kobo等）がある場合は最優先で採用
+        target_url = image_url if image_url else self._select_unsplash_image_url(clean_title, category)
+        print(f"Selected base image URL: {target_url}")
         
         # 2. Download the image
         bg_img = None
         try:
-            print("Downloading background photo...")
+            print("Downloading background/book photo...")
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             }
-            resp = requests.get(unsplash_url, headers=headers, timeout=20)
-            if resp.status_code == 200 and len(resp.content) > 5000:
+            resp = requests.get(target_url, headers=headers, timeout=20)
+            if resp.status_code == 200 and len(resp.content) > 1000:
                 bg_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                 bg_img = bg_img.resize((800, 450), Image.Resampling.LANCZOS)
                 print("Successfully downloaded and resized base background image.")
             else:
-                print(f"Failed to download background image. Status: {resp.status_code}. Using gradient.")
+                print(f"Failed to download image. Status: {resp.status_code}. Using fallback.")
+                if image_url:
+                    # 書籍画像の取得に失敗した場合はUnsplashにフォールバック
+                    fallback_url = self._select_unsplash_image_url(clean_title, category)
+                    resp_fb = requests.get(fallback_url, headers=headers, timeout=20)
+                    if resp_fb.status_code == 200:
+                        bg_img = Image.open(io.BytesIO(resp_fb.content)).convert("RGBA")
+                        bg_img = bg_img.resize((800, 450), Image.Resampling.LANCZOS)
         except Exception as e:
-            print(f"Failed to fetch background photo: {e}. Using gradient.")
+            print(f"Failed to fetch photo: {e}. Using gradient.")
 
         # 3. Compile the final composite image with typography overlays
         return self._generate_composite_image(clean_title, bg_img, output_path)

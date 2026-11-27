@@ -13,7 +13,8 @@ def sanitize_llm_output(content, valid_affiliate_url=""):
     url_pattern = r'https?://[^\s"<>\'\)]+'
     def replace_url(match):
         found_url = match.group(0)
-        if "room.rakuten.co.jp" in found_url or "hb.afl.rakuten.co.jp" in found_url or ("rakuten.co.jp" in found_url and "affiliateId" in found_url) or "hatena.ne.jp" in found_url:
+        allowed_domains = ["room.rakuten.co.jp", "hb.afl.rakuten.co.jp", "rakuten.co.jp", "hatena.ne.jp", "hatenablog.com", "hatenablog.jp", "hateblo.jp", "kurakaji.vercel.app", "croud-travel.pages.dev", "isekai-compas.vercel.app", "mono-repo.hatenablog.jp", "book-muryo.hateblo.jp"]
+        if any(d in found_url for d in allowed_domains):
             return found_url
         return valid_affiliate_url if valid_affiliate_url else "https://room.rakuten.co.jp/jack555/items"
     
@@ -107,6 +108,11 @@ class ArticleGenerator:
 ※注意（厳格厳守）：
 - 記事内に「買わない理由」「デメリット10選」「購入をためらう理由」などの直接的・否定的な表現や見出しを出すことは【絶対に禁止】です。
 - あくまで作品の美点や楽しみ方の提案として洗練された形で提示し、読者が「これなら自分でも楽しめる！今すぐ読みたい」と自然に確信できる文章に仕上げてください。
+
+【★アプリ再検索・離脱防止のリンク誘導戦略（最重要ルール）】
+読者が「なるほど、あとでいつもの読書アプリやストアで検索して読もう」と離脱するスキを与えないでください。
+- 記事内で作品のあらすじの結末や確定価格・ポイント還元率をすべて明かしきってしまわないこと。
+- 型番・ISBNや巻数の言及はOKですが、「現在の無料試し読み増量キャンペーンや最新の割引クーポン・ポイント還元の有無はリンク先で確認」という【今すぐリンク先を確認する理由】を残して誘導してください。
 
 【執筆の構成ルール（見出しの自律設計）】:
 - 作品の魅力を読者にアピールする、キャッチーな見出し（3〜4個程度）を考案してください（例: 「## 圧倒的な設定と魅力的な世界観」「## 物語を彩る魅力的なキャラクターたち」など）。

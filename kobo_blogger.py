@@ -18,6 +18,7 @@ from article_generator import ArticleGenerator
 from image_generator import ImageGenerator
 from yahoo_api import YahooBookAPI
 from toggle_mode import get_next_platform, save_current_platform
+from external_links import find_best_external_link, generate_external_link_html
 
 CACHE_FILE = "posted_cache.txt"
 
@@ -75,10 +76,19 @@ def fetch_kobo_items(app_id: str, access_key: str, affiliate_id: str, genre_id: 
                         encoded_pc_url = urllib.parse.quote(base_item_url)
                         final_affiliate_url = f"https://hb.afl.rakuten.co.jp/hgc/{affiliate_id}/?pc={encoded_pc_url}"
 
+                    # 楽天Kobo APIからの書籍画像URL取得（largeImageUrl優先、なければmediumImageUrl、smallImageUrl）
+                    image_url = (
+                        item_data.get("largeImageUrl") or 
+                        item_data.get("mediumImageUrl") or 
+                        item_data.get("smallImageUrl") or 
+                        ""
+                    )
+
                     items.append({
                         "title": item_data.get("title"),
                         "itemCaption": item_data.get("itemCaption", ""),
                         "affiliateUrl": final_affiliate_url,
+                        "imageUrl": image_url,
                         "itemNumber": item_data.get("itemNumber"),
                         "releaseDate": item_data.get("releaseDate")
                     })
@@ -103,6 +113,7 @@ def get_mock_items(genre_id: str) -> list:
                 "title": "テストコミック新刊 1巻",
                 "itemCaption": "大人気ファンタジーコミックの最新刊！主人公が新たな世界で最強のスキルを手に入れ、仲間と共に魔王に立ち向かう冒険活劇。笑いあり涙ありの超話題作が遂に登場！",
                 "affiliateUrl": "https://r18.afl.rakuten.co.jp/mock_comic",
+                "imageUrl": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop&q=80",
                 "itemNumber": "mock_comic_001",
                 "releaseDate": "2026-06-12"
             }
@@ -113,6 +124,7 @@ def get_mock_items(genre_id: str) -> list:
                 "title": "テストライトノベル新書 1巻",
                 "itemCaption": "異世界転生した主人公が、現代の知識と魔法を使って理想のセカンドライフを築き上げる。立ちはだかる困難を機転と魔法で解決していく爽快ファンタジー小説！",
                 "affiliateUrl": "https://r18.afl.rakuten.co.jp/mock_novel",
+                "imageUrl": "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=800&auto=format&fit=crop&q=80",
                 "itemNumber": "mock_novel_001",
                 "releaseDate": "2026-06-12"
             }
@@ -212,11 +224,13 @@ def post_single_article(
 
     print(f"Selected Item to Post: {target_item['title']} (Number: {target_item['itemNumber']})")
 
-    # Eyecatch Image
+    # Eyecatch Image (書籍表紙画像を最優先で使用)
+    book_cover_url = target_item.get("imageUrl", "")
     eyecatch_path = f"eyecatch_{post_index}.png"
     img_gen.generate_eyecatch(
         prompt=target_item["title"],
         output_path=eyecatch_path,
+        image_url=book_cover_url,
         category=category
     )
 
@@ -249,14 +263,22 @@ def post_single_article(
 
     uploaded_image_url = hatena_client.upload_image_to_fotolife(eyecatch_path)
     if not uploaded_image_url:
-        uploaded_image_url = img_gen._select_unsplash_image_url(
+        uploaded_image_url = book_cover_url or img_gen._select_unsplash_image_url(
             target_item["title"], 
             category=category
         )
 
     translated_synopsis = article_gen.translate_synopsis(target_item['itemCaption'])
 
-    img_html = f'<div style="text-align: center; margin: 20px 0;"><img src="{uploaded_image_url}" alt="{target_item["title"]}" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.08);"></div>'
+    # 本物の書籍表紙画像をクリック可能な形で記事冒頭に表示
+    aff_link = target_item.get("affiliateUrl", "")
+    main_display_img = book_cover_url if book_cover_url else uploaded_image_url
+    img_html = f'''<div style="text-align: center; margin: 25px 0 20px 0;">
+    <a href="{aff_link}" target="_blank" rel="noopener noreferrer" style="display: inline-block; text-decoration: none;">
+        <img src="{main_display_img}" alt="{target_item['title']}" style="max-width: 420px; width: 100%; height: auto; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); display: block; margin: 0 auto;">
+    </a>
+    <p style="font-size: 11px; color: #888; margin-top: 8px;">（※画像クリックで電子書籍ストアの作品ページへ移動できます）</p>
+</div>'''
 
     synopsis_html = f"""<h3>公式あらすじ</h3>
 <div style="background: #f9f9f9; padding: 18px 20px; border-left: 5px solid #0099FF; margin: 20px 0; line-height: 1.6; color: #444; border-radius: 0 8px 8px 0; font-size: 15px;">
@@ -264,11 +286,11 @@ def post_single_article(
 </div>"""
 
     if platform == "yahoo":
-        cta_text = f"＼ Yahoo!ショッピングで『{clean_title}』を見る 🛒 ／"
+        cta_text = f"＼ Yahoo!ショッピングで最新の在庫・価格・特典を確認 🛒 ／"
         cta_btn = "linear-gradient(135deg, #ff0033 0%, #ff334b 100%)"
         cta_shadow = "rgba(255,0,51,0.3)"
     else:
-        cta_text = "＼ 楽天Koboで今すぐ試し読みする 📖 ／"
+        cta_text = "＼ 楽天Koboで試し読み＆最新の特典・価格を確認 📖 ／"
         cta_btn = "#0099FF"
         cta_shadow = "rgba(0,153,255,0.3)"
 
@@ -290,7 +312,18 @@ def post_single_article(
         return tag
         
     html_body = re.sub(r'<a\s+[^>]*>', add_target_blank, html_body)
-    article_content = f"{img_html}\n{html_body}"
+
+    # 外部特化メディア（クラカジ・旅宿クラウド）＆実在サイト相互リンク（異世界コンパス、ものレポ！等）
+    ext_target = find_best_external_link(
+        item_title=target_item.get("title", ""),
+        item_caption=target_item.get("itemCaption", ""),
+        current_site="book-muryo"
+    )
+    ext_link_html = generate_external_link_html(ext_target)
+    if ext_link_html:
+        print(f"[RECIPROCAL-LINK] Added link to {ext_target['domain']} ({ext_target.get('site_name')})")
+
+    article_content = f"{img_html}\n{html_body}\n{ext_link_html}"
 
     # タイトルのテンプレート重複を防止し自然なバリエーションを生成
     title_templates = [
