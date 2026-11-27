@@ -1842,3 +1842,5 @@ yahoo_niyantarose_jpnv105
 4970000618367
 yahoo_astraroad_xp-26062541
 4320000972456
+yahoo_dss_bwdm-1070
+8909132207049
