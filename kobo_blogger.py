@@ -20,6 +20,38 @@ from yahoo_api import YahooBookAPI
 from toggle_mode import get_next_platform, save_current_platform
 from external_links import find_best_external_link, generate_external_link_html
 
+from affiliate_browser import AffiliateBrowserExtractor
+browser_extractor = AffiliateBrowserExtractor()
+
+def build_dual_cta_buttons(primary_url: str, clean_title: str, primary_platform: str = "rakuten") -> str:
+    """書籍用 Yahoo!ショッピング/楽天Kobo と AmazonKindleの2連ボタン（価格非表示）"""
+    amazon_url = browser_extractor.get_amazon_search_url(clean_title)
+    
+    if primary_platform == "yahoo":
+        yahoo_url = primary_url
+        return f'''
+<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin: 30px auto; max-width: 600px;">
+    <a href="{yahoo_url}" target="_blank" rel="noopener noreferrer" style="flex: 1 1 240px; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #ff0033 0%, #cc0000 100%); color: #ffffff; font-size: 1.05em; font-weight: bold; text-decoration: none; padding: 14px 22px; border-radius: 50px; box-shadow: 0 4px 12px rgba(255, 0, 51, 0.3); transition: transform 0.2s ease;">
+        <span style="font-size: 0.9em; margin-right: 6px;">🛒</span> Yahoo!で在庫・試し読み
+    </a>
+    <a href="{amazon_url}" target="_blank" rel="noopener noreferrer" style="flex: 1 1 240px; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #ff9900 0%, #e68a00 100%); color: #ffffff; font-size: 1.05em; font-weight: bold; text-decoration: none; padding: 14px 22px; border-radius: 50px; box-shadow: 0 4px 12px rgba(255, 153, 0, 0.3); transition: transform 0.2s ease;">
+        <span style="font-size: 0.9em; margin-right: 6px;">📖</span> Amazon Kindleで見る
+    </a>
+</div>
+'''
+    else:
+        rakuten_url = primary_url
+        return f'''
+<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin: 30px auto; max-width: 600px;">
+    <a href="{rakuten_url}" target="_blank" rel="noopener noreferrer" style="flex: 1 1 240px; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #0099FF 0%, #007acc 100%); color: #ffffff; font-size: 1.05em; font-weight: bold; text-decoration: none; padding: 14px 22px; border-radius: 50px; box-shadow: 0 4px 12px rgba(0, 153, 255, 0.3); transition: transform 0.2s ease;">
+        <span style="font-size: 0.9em; margin-right: 6px;">📖</span> 楽天Koboで試し読み・詳細
+    </a>
+    <a href="{amazon_url}" target="_blank" rel="noopener noreferrer" style="flex: 1 1 240px; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #ff9900 0%, #e68a00 100%); color: #ffffff; font-size: 1.05em; font-weight: bold; text-decoration: none; padding: 14px 22px; border-radius: 50px; box-shadow: 0 4px 12px rgba(255, 153, 0, 0.3); transition: transform 0.2s ease;">
+        <span style="font-size: 0.9em; margin-right: 6px;">📦</span> Amazon Kindleで見る
+    </a>
+</div>
+'''
+
 CACHE_FILE = "posted_cache.txt"
 
 def load_cache() -> set:
@@ -285,20 +317,15 @@ def post_single_article(
 {translated_synopsis}
 </div>"""
 
-    if platform == "yahoo":
-        cta_text = f"＼ Yahoo!ショッピングで最新の在庫・価格・特典を確認 🛒 ／"
-        cta_btn = "linear-gradient(135deg, #ff0033 0%, #ff334b 100%)"
-        cta_shadow = "rgba(255,0,51,0.3)"
-    else:
-        cta_text = "＼ 楽天Koboで試し読み＆最新の特典・価格を確認 📖 ／"
-        cta_btn = "#0099FF"
-        cta_shadow = "rgba(0,153,255,0.3)"
+    aff_url = target_item.get('affiliateUrl', '')
+    if platform == "yahoo" and aff_url:
+        print("[Affiliate Link] Extracting official Yahoo! affiliate shortlink via browser profile...")
+        official_yahoo_link = browser_extractor.get_yahoo_affiliate_url(aff_url)
+        if official_yahoo_link:
+            target_item['affiliateUrl'] = official_yahoo_link
+            aff_url = official_yahoo_link
 
-    cta_html = f"""<div style="text-align: center; margin: 40px 0 20px 0;">
-    <a href="{target_item['affiliateUrl']}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background: {cta_btn}; color: #fff; padding: 16px 32px; font-size: 18px; font-weight: bold; text-decoration: none; border-radius: 30px; box-shadow: 0 4px 15px {cta_shadow}; text-align: center;">
-        {cta_text}
-    </a>
-</div>"""
+    cta_html = build_dual_cta_buttons(aff_url, clean_title, platform)
 
     raw_article = f"{llm_section}\n\n{synopsis_html}\n\n{cta_html}"
     

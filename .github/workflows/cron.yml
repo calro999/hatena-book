@@ -51,6 +51,7 @@ jobs:
         YAHOO_CLIENT_ID: ${{ secrets.YAHOO_CLIENT_ID }}
         YAHOO_CLIENT_SECRET: ${{ secrets.YAHOO_CLIENT_SECRET }}
         YAHOO_AFFILIATE_ID: ${{ secrets.YAHOO_AFFILIATE_ID }}
+        YAHOO_COOKIES_JSON: ${{ secrets.YAHOO_COOKIES_JSON }}
         POST_PLATFORM: ${{ github.event.inputs.post_platform || '' }}
         HATENA_ID: ${{ secrets.HATENA_ID }}
         HATENA_BLOG_ID: ${{ secrets.HATENA_BLOG_ID }}
